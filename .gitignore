@@ -1,0 +1,5 @@
+# dependencies
+node_modules/
+
+# lock files (generated, not committed at root level)
+package-lock.json
