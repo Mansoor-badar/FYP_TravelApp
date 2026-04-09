@@ -5,22 +5,75 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icons from "../UI/Icon";
+import API from "../API/API";
+
+const BASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const API_KEY  = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
 const LoginScreen = ({ navigation }) => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername]     = useState("");
+  const [password, setPassword]     = useState("");
+  const [errorMsg, setErrorMsg]     = useState("");
+  const [isLoading, setIsLoading]   = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    setErrorMsg("");
+
     if (!username.trim() || !password.trim()) {
-      Alert.alert("Error", "Please enter your username and password.");
+      setErrorMsg("Please enter your username and password.");
       return;
     }
-    // TODO: implement login logic against the API
-    Alert.alert("Login", `Logging in as ${username}`);
+
+    if (!BASE_URL || !API_KEY) {
+      setErrorMsg("API configuration is missing. Check your .env file.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Fetch all users from the Supabase REST endpoint
+      const endpoint = `/rest/v1/users?select=id,username,password&apikey=${API_KEY}`;
+      const response = await API.get(endpoint);
+
+      if (!response.isSuccess) {
+        setErrorMsg(response.message || "Failed to reach the server.");
+        setIsLoading(false);
+        return;
+      }
+
+      const users = Array.isArray(response.result) ? response.result : [];
+
+      // Match credentials (case-sensitive)
+      const matchedUser = users.find(
+        (u) =>
+          u.username === username.trim() &&
+          u.password === password.trim()
+      );
+
+      if (!matchedUser) {
+        setErrorMsg("Invalid username or password.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Persist the authenticated user ID globally
+      global.UserID = matchedUser.id;
+
+      // Reset the stack so the user cannot navigate back to Login
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Home" }],
+      });
+    } catch (err) {
+      setErrorMsg("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -66,14 +119,26 @@ const LoginScreen = ({ navigation }) => {
           </View>
         </View>
 
+        {/* Error message */}
+        {!!errorMsg && (
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        )}
+
         {/* Login button */}
         <TouchableOpacity
-          style={styles.loginButton}
+          style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
           onPress={handleLogin}
           activeOpacity={0.8}
+          disabled={isLoading}
         >
-          <Icons.Submit size={18} color="#fff" />
-          <Text style={styles.loginButtonText}>Log In</Text>
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Icons.Submit size={18} color="#fff" />
+              <Text style={styles.loginButtonText}>Log In</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {/* Divider */}
@@ -153,6 +218,15 @@ const styles = StyleSheet.create({
   },
 
   /* Buttons */
+  /* Error */
+  errorText: {
+    color: "#cc0000",
+    fontSize: 13,
+    marginBottom: 8,
+    marginTop: -4,
+  },
+
+  /* Buttons */
   loginButton: {
     height: 48,
     borderRadius: 6,
@@ -162,6 +236,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     marginTop: 8,
+  },
+  loginButtonDisabled: {
+    backgroundColor: "#555",
   },
   loginButtonText: {
     color: "#fff",

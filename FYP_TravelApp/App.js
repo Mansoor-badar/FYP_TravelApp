@@ -5,6 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import LoginScreen      from "./src/components/screens/LoginScreen";
 import AddProfileScreen from "./src/components/screens/profile/AddProfileScreen";
+import HomeScreen       from "./src/components/screens/HomeScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -21,8 +22,10 @@ export default function App() {
         >
           <Stack.Screen name="Login"      component={LoginScreen}      />
           <Stack.Screen name="AddProfile" component={AddProfileScreen} />
+          <Stack.Screen name="Home"       component={HomeScreen}       />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
   );
 }
+
