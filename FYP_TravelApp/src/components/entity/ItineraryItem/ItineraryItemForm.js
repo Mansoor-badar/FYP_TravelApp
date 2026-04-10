@@ -6,13 +6,13 @@ import API from "../../API/API";
 // ── Default shape for a brand-new itinerary item ──────────────────────────────
 
 const defaultItem = {
-  trip_id:              "",
-  activity_name:        "",
+  trip_id: "",
+  activity_name: "",
   activity_description: "",
-  start_time:           null,
-  latitude:             "",
-  longitude:            "",
-  order_index:          "",
+  start_time: null,
+  latitude: "",
+  longitude: "",
+  order_index: "",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -29,14 +29,20 @@ const defaultItem = {
  *   onSubmit(item) – called with the saved/updated item on success.
  *   onCancel()     – called when the user presses Cancel.
  */
-const ItineraryItemForm = ({ originalItem, tripId, onSubmit, onCancel }) => {
+const ItineraryItemForm = ({
+  originalItem,
+  tripId,
+  onSubmit,
+  onCancel,
+  deferToParent = false,
+}) => {
   // Initialisations ─────────────────────────────────────────────────────────
 
   const toFlat = (i) => ({
     ...defaultItem,
     ...i,
-    latitude:    i?.latitude    != null ? String(i.latitude)    : "",
-    longitude:   i?.longitude   != null ? String(i.longitude)   : "",
+    latitude: i?.latitude != null ? String(i.latitude) : "",
+    longitude: i?.longitude != null ? String(i.longitude) : "",
     order_index: i?.order_index != null ? String(i.order_index) : "",
   });
 
@@ -57,23 +63,31 @@ const ItineraryItemForm = ({ originalItem, tripId, onSubmit, onCancel }) => {
     }
 
     const payload = {
-      trip_id:       originalItem?.trip_id ?? tripId ?? item.trip_id.trim(),
+      trip_id: originalItem?.trip_id ?? tripId ?? item.trip_id.trim(),
       activity_name: item.activity_name.trim(),
       ...(item.activity_description.trim() && {
         activity_description: item.activity_description.trim(),
       }),
       ...(item.start_time && { start_time: item.start_time }),
-      ...(item.latitude.trim()  && { latitude:  parseFloat(item.latitude)  }),
+      ...(item.latitude.trim() && { latitude: parseFloat(item.latitude) }),
       ...(item.longitude.trim() && { longitude: parseFloat(item.longitude) }),
-      ...(item.order_index.trim() && { order_index: parseInt(item.order_index, 10) }),
+      ...(item.order_index.trim() && {
+        order_index: parseInt(item.order_index, 10),
+      }),
     };
+
+    if (deferToParent) {
+      // Don't call API here; pass the prepared payload back to the parent
+      onSubmit({ ...payload });
+      return;
+    }
 
     setSaving(true);
     let result;
     if (originalItem?.id) {
       result = await API.put(
         `/rest/v1/itinerary_items?id=eq.${originalItem.id}`,
-        payload
+        payload,
       );
     } else {
       result = await API.post(`/rest/v1/itinerary_items`, payload);
@@ -81,9 +95,18 @@ const ItineraryItemForm = ({ originalItem, tripId, onSubmit, onCancel }) => {
     setSaving(false);
 
     if (result.isSuccess) {
-      onSubmit({ ...payload, id: originalItem?.id });
+      // Prefer the server-returned id for newly created rows
+      const returnedId =
+        originalItem?.id ??
+        (Array.isArray(result.result)
+          ? result.result[0]?.id
+          : result.result?.id);
+      onSubmit({ ...payload, id: returnedId });
     } else {
-      Alert.alert("Error", result.message || "Could not save item. Please try again.");
+      Alert.alert(
+        "Error",
+        result.message || "Could not save item. Please try again.",
+      );
     }
   };
 
@@ -93,7 +116,6 @@ const ItineraryItemForm = ({ originalItem, tripId, onSubmit, onCancel }) => {
 
   return (
     <Form onSubmit={handleSubmit} onCancel={onCancel} submitLabel={submitLabel}>
-
       {/* ── Activity ──────────────────────────────────── */}
       <Text style={styles.sectionHeading}>Activity *</Text>
 
@@ -143,7 +165,6 @@ const ItineraryItemForm = ({ originalItem, tripId, onSubmit, onCancel }) => {
         onChange={(v) => handleChange("longitude", v)}
         placeholder="e.g. 2.2945"
       />
-
     </Form>
   );
 };

@@ -29,16 +29,38 @@ const callFetch = async (endpoint, method, dataObj = null) => {
       },
       body: JSON.stringify(dataObj),
     };
+    // For POST requests to PostgREST (Supabase), ask the server to return
+    // the created representation so the client receives the new row(s).
+    if (method === 'POST') {
+      requestObj.headers.Prefer = 'return=representation';
+    }
   }
 
   // Call the fetch and process the return
   try {
     let result = null;
     const response = await fetch(`${BASE_URL}${endpoint}`, requestObj);
-    if (response.status !== 204) result = await response.json();
-    return response.status >= 200 && response.status < 300
-      ? { isSuccess: true, result }
-      : { isSuccess: false, message: `${result.message}` };
+
+    // Read response body as text first to avoid json parse errors on empty bodies
+    const text = await response.text();
+    if (text) {
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        // Not JSON — keep raw text as result
+        result = text;
+      }
+    } else {
+      result = null;
+    }
+
+    if (response.status >= 200 && response.status < 300) {
+      return { isSuccess: true, result };
+    }
+
+    // Build a sensible error message if possible
+    const message = (result && result.message) ? result.message : (typeof result === 'string' && result) ? result : response.statusText;
+    return { isSuccess: false, message };
   } catch (error) {
     return { isSuccess: false, message: error.message };
   }

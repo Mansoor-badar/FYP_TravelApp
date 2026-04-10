@@ -3,6 +3,7 @@ import {
   Text,
   View,
   TextInput,
+  TouchableOpacity,
 } from "react-native";
 import Icons from "./Icon";
 import Button, { ButtonTray } from "./Button";
