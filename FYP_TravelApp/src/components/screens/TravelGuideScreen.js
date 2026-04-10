@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const MapScreen = () => {
+const TravelGuideScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.inner}>
-        <Text style={styles.title}>Welcome to Map</Text>
+        <Text style={styles.title}>Welcome to Travel Guide</Text>
       </View>
     </SafeAreaView>
   );
@@ -29,4 +29,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MapScreen;
+export default TravelGuideScreen;

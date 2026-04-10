@@ -1,13 +1,35 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import LoginScreen      from "./src/components/screens/LoginScreen";
-import AddProfileScreen from "./src/components/screens/profile/AddProfileScreen";
-import HomeScreen       from "./src/components/screens/HomeScreen";
+import LoginScreen       from "./src/components/screens/LoginScreen";
+import AddProfileScreen  from "./src/components/screens/profile/AddProfileScreen";
+import HomeScreen        from "./src/components/screens/HomeScreen";
+import GroupScreen       from "./src/components/screens/GroupScreen";
+import MapScreen         from "./src/components/screens/MapScreen";
+import TravelGuideScreen from "./src/components/screens/TravelGuideScreen";
+import ProfileScreen     from "./src/components/screens/ProfileScreen";
+import BottomNavBar      from "./src/components/UI/BottomNavBar";
 
 const Stack = createNativeStackNavigator();
+const Tab   = createBottomTabNavigator();
+
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      tabBar={(props) => <BottomNavBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="Home"        component={HomeScreen}        />
+      <Tab.Screen name="Group"       component={GroupScreen}       />
+      <Tab.Screen name="Map"         component={MapScreen}         />
+      <Tab.Screen name="TravelGuide" component={TravelGuideScreen} />
+      <Tab.Screen name="Profile"     component={ProfileScreen}     />
+    </Tab.Navigator>
+  );
+}
 
 export default function App() {
   return (
@@ -16,16 +38,16 @@ export default function App() {
         <StatusBar style="dark" />
         <Stack.Navigator
           initialRouteName="Login"
-          screenOptions={{
-            headerShown: false,
-          }}
+          screenOptions={{ headerShown: false }}
         >
+          {/* Auth screens — no bottom nav */}
           <Stack.Screen name="Login"      component={LoginScreen}      />
           <Stack.Screen name="AddProfile" component={AddProfileScreen} />
-          <Stack.Screen name="Home"       component={HomeScreen}       />
+
+          {/* Authenticated app — Tab navigator with BottomNavBar */}
+          <Stack.Screen name="MainTabs"   component={MainTabs}         />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
   );
 }
-

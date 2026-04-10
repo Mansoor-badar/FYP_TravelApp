@@ -66,7 +66,7 @@ const LoginScreen = ({ navigation }) => {
       // Reset the stack so the user cannot navigate back to Login
       navigation.reset({
         index: 0,
-        routes: [{ name: "Home" }],
+        routes: [{ name: "MainTabs" }],
       });
     } catch (err) {
       setErrorMsg("An unexpected error occurred. Please try again.");
