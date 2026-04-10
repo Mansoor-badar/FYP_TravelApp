@@ -3,9 +3,9 @@ import {
   Text,
   View,
   TextInput,
-  TouchableOpacity,
 } from "react-native";
 import Icons from "./Icon";
+import Button, { ButtonTray } from "./Button";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useState } from "react";
 import { Picker } from "@react-native-picker/picker";
@@ -33,30 +33,22 @@ const Form = ({ children, onSubmit, onCancel, submitLabel = "Submit" }) => {
       >
         {children}
 
-        <View style={styles.buttonTray}>
-          <TouchableOpacity
-            style={[styles.button, styles.submitButton]}
+        <ButtonTray>
+          <Button
+            label={submitLabel}
+            icon={<Icons.Submit size={16} color="#fff" />}
             onPress={onSubmit}
-            activeOpacity={0.75}
-          >
-            <Icons.Submit size={16} color="#fff" />
-            <Text style={styles.buttonText}>{submitLabel}</Text>
-          </TouchableOpacity>
-
-          {/* Cancel is optional — only renders if onCancel is passed in */}
+            variant="primary"
+          />
           {onCancel && (
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
+            <Button
+              label="Cancel"
+              icon={<Icons.Close size={16} color="#555" />}
               onPress={onCancel}
-              activeOpacity={0.75}
-            >
-              <Icons.Close size={16} color="#555" />
-              <Text style={[styles.buttonText, styles.cancelButtonText]}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
+              variant="ghost"
+            />
           )}
-        </View>
+        </ButtonTray>
       </KeyboardAwareScrollView>
     </View>
   );
@@ -255,36 +247,6 @@ const styles = StyleSheet.create({
     color: "#333",
   },
 
-  buttonTray: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
-  },
-  button: {
-    flex: 1,
-    height: 48,
-    borderRadius: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  submitButton: {
-    backgroundColor: "#2563EB",
-  },
-  cancelButton: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  buttonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  cancelButtonText: {
-    color: "#555",
-  },
 });
 
 export default Form;
