@@ -3,13 +3,12 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icons from "../UI/Icon";
 import API from "../API/API";
+import Button, { ButtonTray } from "../UI/Button";
 
 const BASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const API_KEY  = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
@@ -125,21 +124,15 @@ const LoginScreen = ({ navigation }) => {
         )}
 
         {/* Login button */}
-        <TouchableOpacity
-          style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-          onPress={handleLogin}
-          activeOpacity={0.8}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Icons.Submit size={18} color="#fff" />
-              <Text style={styles.loginButtonText}>Log In</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <ButtonTray>
+          <Button
+            label="Log In"
+            icon={<Icons.Submit size={18} color="#fff" />}
+            onPress={handleLogin}
+            loading={isLoading}
+            variant="primary"
+          />
+        </ButtonTray>
 
         {/* Divider */}
         <View style={styles.divider}>
@@ -149,14 +142,14 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         {/* Register button */}
-        <TouchableOpacity
-          style={styles.registerButton}
-          onPress={() => navigation.navigate("AddProfile")}
-          activeOpacity={0.8}
-        >
-          <Icons.Add size={18} color="#000" />
-          <Text style={styles.registerButtonText}>Create an Account</Text>
-        </TouchableOpacity>
+        <ButtonTray>
+          <Button
+            label="Create an Account"
+            icon={<Icons.Add size={18} color="#000" />}
+            onPress={() => navigation.navigate("AddProfile")}
+            variant="secondary"
+          />
+        </ButtonTray>
       </View>
     </SafeAreaView>
   );
@@ -226,26 +219,6 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
 
-  /* Buttons */
-  loginButton: {
-    height: 48,
-    borderRadius: 6,
-    backgroundColor: "#000",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 8,
-  },
-  loginButtonDisabled: {
-    backgroundColor: "#555",
-  },
-  loginButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-
   divider: {
     flexDirection: "row",
     alignItems: "center",
@@ -260,23 +233,6 @@ const styles = StyleSheet.create({
   dividerText: {
     fontSize: 13,
     color: "#999",
-  },
-
-  registerButton: {
-    height: 48,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#000",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#fff",
-  },
-  registerButtonText: {
-    color: "#000",
-    fontSize: 15,
-    fontWeight: "600",
   },
 });
 
