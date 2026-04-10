@@ -10,8 +10,9 @@ import Icons from "../UI/Icon";
 import API from "../API/API";
 import Button, { ButtonTray } from "../UI/Button";
 
+// API.js reads these env vars internally; we only need BASE_URL here to
+// guard against a missing config before attempting a network call.
 const BASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const API_KEY  = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername]     = useState("");
@@ -27,7 +28,7 @@ const LoginScreen = ({ navigation }) => {
       return;
     }
 
-    if (!BASE_URL || !API_KEY) {
+    if (!BASE_URL) {
       setErrorMsg("API configuration is missing. Check your .env file.");
       return;
     }
@@ -35,8 +36,10 @@ const LoginScreen = ({ navigation }) => {
     setIsLoading(true);
 
     try {
-      // Fetch all users from the Supabase REST endpoint
-      const endpoint = `/rest/v1/users?select=id,username,password&apikey=${API_KEY}`;
+      // Fetch users from the Supabase REST API.
+      // Column names (username, password) match the users table exactly.
+      // API.js attaches the apikey + Authorization headers automatically.
+      const endpoint = `/rest/v1/users?select=id,username,password`;
       const response = await API.get(endpoint);
 
       if (!response.isSuccess) {
@@ -69,6 +72,7 @@ const LoginScreen = ({ navigation }) => {
         routes: [{ name: "MainTabs" }],
       });
     } catch (err) {
+      console.error("[LoginScreen] handleLogin error:", err);
       setErrorMsg("An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
