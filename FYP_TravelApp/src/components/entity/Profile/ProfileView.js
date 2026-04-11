@@ -1,4 +1,59 @@
-import { Image, StyleSheet, Text, View } from "react-native";
+import React from "react";
+import { Pressable, Image, StyleSheet, Text, View } from "react-native";
+
+/**
+ * ProfileIcon
+ *
+ * Minimal inline component showing a circular avatar icon and the
+ * user's username only. Useful where space is limited.
+ */
+export const ProfileIcon = ({ profile, onPress }) => {
+  if (!profile) return null;
+  const avatarUri =
+    profile.profile_image_url || "https://i.sstatic.net/l60Hf.png";
+  return (
+    <Pressable
+      onPress={() => onPress?.(profile)}
+      style={({ pressed }) => [styles.iconWrap, pressed && styles.iconPressed]}
+    >
+      <Image source={{ uri: avatarUri }} style={styles.avatarIcon} />
+      {!!profile.username && (
+        <Text style={styles.iconUsername}>@{profile.username}</Text>
+      )}
+    </Pressable>
+  );
+};
+
+/**
+ * ProfileCard
+ *
+ * Compact card for lists (avatar + display name + username).
+ * This is the same UI that previously lived in `ProfileCard.js`.
+ */
+export const ProfileCard = ({ profile, onPress }) => {
+  if (!profile) return null;
+  const fullName =
+    `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || "—";
+  const avatarUri =
+    profile.profile_image_url || "https://i.sstatic.net/l60Hf.png";
+
+  return (
+    <Pressable
+      onPress={() => onPress?.(profile)}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      <View style={styles.row}>
+        <Image source={{ uri: avatarUri }} style={styles.avatarSmall} />
+        <View style={styles.info}>
+          <Text style={styles.name}>{fullName}</Text>
+          {!!profile.username && (
+            <Text style={styles.username}>@{profile.username}</Text>
+          )}
+        </View>
+      </View>
+    </Pressable>
+  );
+};
 
 /**
  * ProfileView
@@ -9,9 +64,11 @@ import { Image, StyleSheet, Text, View } from "react-native";
  * Props:
  *   profile – profile object to display.
  */
-const ProfileView = ({ profile }) => {
-  // Initialisations ─────────────────────────────────────────────────────────
-  const fullName = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+const ProfileView = ({ profile, circularAvatar = false }) => {
+  if (!profile) return null;
+  // Initialisations
+  const fullName =
+    `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
   const avatarUri =
     profile.profile_image_url || "https://i.sstatic.net/l60Hf.png";
 
@@ -19,14 +76,16 @@ const ProfileView = ({ profile }) => {
   const hasSocial =
     socialLinks.instagram || socialLinks.facebook || socialLinks.twitter;
 
-  // View ────────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       {/* Avatar */}
-      <Image source={{ uri: avatarUri }} style={styles.avatar} />
+      <Image
+        source={{ uri: avatarUri }}
+        style={circularAvatar ? styles.avatarCircle : styles.avatar}
+      />
 
       {/* Name + username */}
-      <View style={styles.nameRow}>
+      <View style={[styles.nameRow, circularAvatar && styles.nameRowCentered]}>
         <Text style={styles.fullName}>{fullName || "—"}</Text>
         {!!profile.username && (
           <Text style={styles.username}>@{profile.username}</Text>
@@ -115,7 +174,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
 
-  /* Avatar ────────────────────────────── */
+  /* Avatar (large) */
   avatar: {
     width: "100%",
     aspectRatio: 1.5,
@@ -124,9 +183,23 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
 
-  /* Name block ────────────────────────── */
+  /* Circular avatar variant for profile screen */
+  avatarCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignSelf: "center",
+    backgroundColor: "#f0f0f0",
+    resizeMode: "cover",
+    marginBottom: 8,
+  },
+
+  /* Name block */
   nameRow: {
     gap: 2,
+  },
+  nameRowCentered: {
+    alignItems: "center",
   },
   fullName: {
     fontSize: 22,
@@ -138,7 +211,7 @@ const styles = StyleSheet.create({
     color: "#888",
   },
 
-  /* Chips ─────────────────────────────── */
+  /* Chips */
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -157,7 +230,7 @@ const styles = StyleSheet.create({
     color: "#444",
   },
 
-  /* Sections ──────────────────────────── */
+  /* Sections */
   section: {
     gap: 4,
   },
@@ -181,6 +254,41 @@ const styles = StyleSheet.create({
     color: "#888",
     fontWeight: "600",
   },
+
+  /* Compact card styles (ProfileCard) */
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 10,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: "#eee",
+    shadowColor: "#000",
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  cardPressed: { opacity: 0.7 },
+  row: { flexDirection: "row", alignItems: "center", gap: 12 },
+  avatarSmall: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: "#f0f0f0",
+  },
+  info: { flex: 1 },
+  name: { fontSize: 16, fontWeight: "700", color: "#111" },
+
+  /* ProfileIcon */
+  iconWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
+  iconPressed: { opacity: 0.7 },
+  avatarIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f0f0f0",
+  },
+  iconUsername: { fontSize: 14, fontWeight: "700", color: "#111" },
 });
 
 export default ProfileView;
