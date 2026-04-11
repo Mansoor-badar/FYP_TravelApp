@@ -34,6 +34,11 @@ const TripItem = ({ trip, onSelect }) => {
 
       <View style={styles.meta}>
         {dateRange ? <Text style={styles.dates}>{dateRange}</Text> : null}
+        {trip.number_of_participants != null ? (
+          <Text style={styles.participants}>
+            {trip.number_of_participants} participants
+          </Text>
+        ) : null}
         <Text
           style={[
             styles.visibility,
@@ -63,6 +68,7 @@ const styles = StyleSheet.create({
   destination: { fontSize: 13, color: "#666", marginTop: 2 },
   meta: { alignItems: "flex-end" },
   dates: { fontSize: 12, color: "#888" },
+  participants: { fontSize: 12, color: "#666", marginTop: 2 },
   visibility: {
     marginTop: 6,
     fontSize: 12,

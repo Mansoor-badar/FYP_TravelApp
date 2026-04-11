@@ -74,6 +74,7 @@ const InputText = ({
   onChange,
   placeholder = "",
   secureTextEntry = false,
+  keyboardType = "default",
 }) => {
   return (
     <View style={styles.item}>
@@ -84,6 +85,7 @@ const InputText = ({
         onChangeText={onChange}
         placeholder={placeholder}
         secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
         style={styles.itemTextInput}
         placeholderTextColor="#aaa"
       />

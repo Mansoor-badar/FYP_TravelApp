@@ -1,55 +1,106 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
-  Alert,
   ScrollView,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import Button from "../UI/Button";
-import TripForm from "../entity/Trip/TripForm";
 import API from "../API/API";
 import TripView from "../entity/Trip/TripView";
 
-const HomeScreen = () => {
-  const [showTripModal, setShowTripModal] = useState(false);
+const HomeScreen = ({ navigation }) => {
   const [trips, setTrips] = useState([]);
-  const [loadingTrips, setLoadingTrips] = useState(false);
-  const [selectedTrip, setSelectedTrip] = useState(null);
-  const [showTripView, setShowTripView] = useState(false);
+  // participant records for the current user: [{ trip_id, status, ... }]
+  const [myParticipations, setMyParticipations] = useState([]);
+  // accepted participant counts per trip: { [trip_id]: number }
+  const [participantCounts, setParticipantCounts] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  const fetchTrips = async () => {
-    setLoadingTrips(true);
-    const res = await API.get(`/rest/v1/trips?select=*`);
-    setLoadingTrips(false);
-    if (!res.isSuccess) {
-      console.error("Failed to load trips:", res.message);
-      return;
-    }
-    const rows = Array.isArray(res.result)
-      ? res.result
-      : res.result
-        ? [res.result]
-        : [];
-    setTrips(rows);
-  };
+  // Refresh every time the screen comes into focus (e.g. after TripView goBack)
+  useFocusEffect(
+    useCallback(() => {
+      async function fetchData() {
+        const userId = global.UserID ?? null;
+        setLoading(true);
 
-  useEffect(() => {
-    fetchTrips();
-  }, []);
+        const [tripsRes, participationsRes, countsRes] = await Promise.all([
+          API.get(`/rest/v1/trips?select=*`),
+          userId
+            ? API.get(
+                `/rest/v1/participants?user_id=eq.${userId}&status=neq.rejected&select=*`,
+              )
+            : Promise.resolve({ isSuccess: true, result: [] }),
+          API.get(`/rest/v1/participants?status=eq.accepted&select=trip_id`),
+        ]);
 
-  const handleTripCreated = (trip) => {
-    setShowTripModal(false);
-    Alert.alert("Success", "Trip created successfully.");
-    fetchTrips();
-  };
+        if (tripsRes.isSuccess) {
+          const rows = Array.isArray(tripsRes.result)
+            ? tripsRes.result
+            : tripsRes.result
+              ? [tripsRes.result]
+              : [];
+          setTrips(rows);
+        }
+
+        if (participationsRes.isSuccess) {
+          const rows = Array.isArray(participationsRes.result)
+            ? participationsRes.result
+            : participationsRes.result
+              ? [participationsRes.result]
+              : [];
+          setMyParticipations(rows);
+        }
+
+        if (countsRes.isSuccess) {
+          const rows = Array.isArray(countsRes.result)
+            ? countsRes.result
+            : countsRes.result
+              ? [countsRes.result]
+              : [];
+          const counts = {};
+          rows.forEach((r) => {
+            counts[r.trip_id] = (counts[r.trip_id] || 0) + 1;
+          });
+          setParticipantCounts(counts);
+        }
+
+        setLoading(false);
+      }
+      fetchData();
+    }, []),
+  );
 
   const handleOpenTrip = (trip) => {
-    setSelectedTrip(trip);
-    setShowTripView(true);
+    navigation.navigate("TripView", { trip });
+  };
+
+  const userId = global.UserID ?? null;
+
+  // Trip IDs where the current user is a participant (not host)
+  const participantTripIds = new Set(myParticipations.map((p) => p.trip_id));
+
+  // My Trips = trips I host + trips I have a pending/accepted record for
+  const myTrips = trips.filter(
+    (t) => t.host_id === userId || participantTripIds.has(t.id),
+  );
+
+  // Available = all trips where I am neither host nor already a participant
+  const availableTrips = trips.filter(
+    (t) => t.host_id !== userId && !participantTripIds.has(t.id),
+  );
+
+  // Helper: get participation status label for a trip card
+  const participationLabel = (trip) => {
+    if (trip.host_id === userId) return null; // I'm the host, no status needed
+    const p = myParticipations.find((r) => r.trip_id === trip.id);
+    if (!p) return null;
+    if (p.status === "accepted") return "Joined";
+    if (p.status === "pending") return "Pending";
+    return null;
   };
 
   return (
@@ -58,13 +109,13 @@ const HomeScreen = () => {
         <View style={styles.addButtonWrapper}>
           <Button
             label="+ Add Trip"
-            onClick={() => setShowTripModal(true)}
+            onClick={() => navigation.navigate("TripAdd")}
             variant="secondary"
             styleButton={{ flex: 0, width: "100%" }}
           />
         </View>
 
-        {loadingTrips ? (
+        {loading ? (
           <ActivityIndicator
             size="large"
             color="#000"
@@ -77,75 +128,53 @@ const HomeScreen = () => {
           >
             {/* My Trips */}
             <Text style={styles.sectionHeader}>My Trips</Text>
-            {(() => {
-              const userId = global.UserID ?? null;
-              const myTrips = userId
-                ? trips.filter((t) => t.host_id === userId)
-                : [];
-              if (myTrips.length === 0) {
+            {myTrips.length === 0 ? (
+              <Text style={styles.emptyHint}>You have no trips yet.</Text>
+            ) : (
+              myTrips.map((t) => {
+                const statusLabel = participationLabel(t);
                 return (
-                  <Text style={styles.emptyHint}>You have no trips yet.</Text>
+                  <View key={t.id}>
+                    {!!statusLabel && (
+                      <Text
+                        style={[
+                          styles.participationBadge,
+                          statusLabel === "Joined"
+                            ? styles.badgeJoined
+                            : styles.badgePending,
+                        ]}
+                      >
+                        {statusLabel}
+                      </Text>
+                    )}
+                    <TripView
+                      trip={t}
+                      compact
+                      participantCount={participantCounts[t.id] ?? 0}
+                      onPress={handleOpenTrip}
+                    />
+                  </View>
                 );
-              }
-              return myTrips.map((t) => (
-                <TripView
-                  key={t.id}
-                  trip={t}
-                  compact
-                  onPress={handleOpenTrip}
-                />
-              ));
-            })()}
+              })
+            )}
 
             {/* Available Trips */}
             <Text style={styles.sectionHeader}>Available Trips</Text>
-            {(() => {
-              const userId = global.UserID ?? null;
-              const available = trips.filter(
-                (t) => t.is_public && t.host_id !== userId,
-              );
-              if (available.length === 0) {
-                return (
-                  <Text style={styles.emptyHint}>
-                    No public trips available.
-                  </Text>
-                );
-              }
-              return available.map((t) => (
+            {availableTrips.length === 0 ? (
+              <Text style={styles.emptyHint}>No trips available to join.</Text>
+            ) : (
+              availableTrips.map((t) => (
                 <TripView
                   key={t.id}
                   trip={t}
                   compact
+                  participantCount={participantCounts[t.id] ?? 0}
                   onPress={handleOpenTrip}
                 />
-              ));
-            })()}
+              ))
+            )}
           </ScrollView>
         )}
-
-        <Modal visible={showTripModal} animationType="slide">
-          <SafeAreaView style={styles.modalContainer}>
-            <TripForm
-              hostId={global.UserID}
-              onSubmit={handleTripCreated}
-              onCancel={() => setShowTripModal(false)}
-            />
-          </SafeAreaView>
-        </Modal>
-
-        <Modal visible={showTripView} animationType="slide">
-          <SafeAreaView style={styles.modalContainer}>
-            <TripView trip={selectedTrip} />
-            <View style={styles.modalFooter}>
-              <Button
-                label="Close"
-                onClick={() => setShowTripView(false)}
-                variant="primary"
-                styleButton={{ flex: 0, width: "100%" }}
-              />
-            </View>
-          </SafeAreaView>
-        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -163,30 +192,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 8,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#000",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#555",
-  },
   addButtonWrapper: {
     width: "100%",
     marginTop: 12,
     marginBottom: 12,
-  },
-  modalFooter: {
-    width: "100%",
-    marginTop: 18,
-    paddingBottom: 24,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: "#fff",
-    paddingHorizontal: 24,
   },
   listContainer: {
     width: "100%",
@@ -205,6 +214,25 @@ const styles = StyleSheet.create({
     color: "#888",
     fontSize: 14,
     marginBottom: 8,
+  },
+  participationBadge: {
+    alignSelf: "flex-start",
+    fontSize: 11,
+    fontWeight: "700",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginBottom: -4,
+    marginTop: 4,
+    overflow: "hidden",
+  },
+  badgeJoined: {
+    backgroundColor: "#e6f4ea",
+    color: "#2e7d32",
+  },
+  badgePending: {
+    backgroundColor: "#fff8e1",
+    color: "#f57f17",
   },
 });
 
