@@ -129,7 +129,9 @@ const ProfileForm = ({ originalProfile, onSubmit, onCancel }) => {
       // blank out any column we omit. API.js sends method PUT; Supabase accepts
       // both PUT and PATCH for row-level updates via the REST API.
       const patchEndpoint = `/rest/v1/users?id=eq.${originalProfile.id}`;
-      result = await API.put(patchEndpoint, payload);
+      // Use PATCH for partial updates — safer and avoids issues where
+      // PostgREST expects full row replacement with PUT.
+      result = await API.patch(patchEndpoint, payload);
     } else {
       // POST creates a new row. Supabase returns 201 on success.
       result = await API.post(`/rest/v1/users`, payload);

@@ -6,6 +6,7 @@ const API = {};
 API.get = (endpoint) => callFetch(endpoint, 'GET');
 API.post = (endpoint, data) => callFetch(endpoint, 'POST', data);
 API.put = (endpoint, data) => callFetch(endpoint, 'PUT', data);
+API.patch = (endpoint, data) => callFetch(endpoint, 'PATCH', data);
 API.delete = (endpoint, data) => callFetch(endpoint, 'DELETE', data);
 
 export default API;

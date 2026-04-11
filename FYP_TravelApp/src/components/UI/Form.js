@@ -9,6 +9,7 @@ import Icons from "./Icon";
 import Button, { ButtonTray } from "./Button";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -16,18 +17,26 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 // onSubmit/onCancel handlers. submitLabel defaults to "Submit" if you
 // don't pass one in.
 const Form = ({ children, onSubmit, onCancel, submitLabel = "Submit" }) => {
+  const insets = useSafeAreaInsets();
+  // Approximate tab bar overlay height — used to ensure the form's
+  // action buttons are scrolled above the floating BottomNavBar.
+  const NAVBAR_OVERLAY = 90;
+  const basePadding = 20; // matches styles.formItems.paddingBottom
+  const computedPaddingBottom =
+    basePadding + (insets.bottom ?? 0) + NAVBAR_OVERLAY;
+
   return (
     <View style={styles.formContainer}>
       {/*
         KeyboardAwareScrollView handles the keyboard pushing content up.
-        extraScrollHeight gives a bit of breathing room above the keyboard
-        so the focused field isn't right at the edge.
-        keyboardShouldPersistTaps="handled" means taps on buttons still
-        work while the keyboard is open — without this, the first tap just
-        dismisses the keyboard and does nothing.
+        We add a larger bottom padding so the submit/cancel buttons are
+        reachable when a floating bottom nav bar is present.
       */}
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.formItems}
+        contentContainerStyle={[
+          styles.formItems,
+          { paddingBottom: computedPaddingBottom },
+        ]}
         enableOnAndroid={true}
         extraScrollHeight={100}
         keyboardShouldPersistTaps="handled"
@@ -57,7 +66,13 @@ const Form = ({ children, onSubmit, onCancel, submitLabel = "Submit" }) => {
 
 // A standard text input with a label above it.
 // secureTextEntry hides the text — use this for passwords.
-const InputText = ({ label, value, onChange, placeholder = "", secureTextEntry = false }) => {
+const InputText = ({
+  label,
+  value,
+  onChange,
+  placeholder = "",
+  secureTextEntry = false,
+}) => {
   return (
     <View style={styles.item}>
       {/* Skip rendering the label element entirely if no label was passed */}
@@ -76,7 +91,13 @@ const InputText = ({ label, value, onChange, placeholder = "", secureTextEntry =
 
 // A dropdown picker. options should be an array of { label, value } objects.
 // The prompt is the greyed-out "select something" text shown before a choice is made.
-const InputSelect = ({ label, prompt = "Select an option…", options = [], value, onChange }) => {
+const InputSelect = ({
+  label,
+  prompt = "Select an option…",
+  options = [],
+  value,
+  onChange,
+}) => {
   return (
     <View style={styles.item}>
       {label ? <Text style={styles.itemLabel}>{label}</Text> : null}
@@ -99,7 +120,11 @@ const InputSelect = ({ label, prompt = "Select an option…", options = [], valu
             style={styles.itemPickerPromptStyle}
           />
           {options.map((option, index) => (
-            <Picker.Item key={index} value={option.value} label={option.label} />
+            <Picker.Item
+              key={index}
+              value={option.value}
+              label={option.label}
+            />
           ))}
         </Picker>
       </View>
@@ -123,7 +148,7 @@ const DatePicker = ({ label, value, onChange }) => {
   if (value && !isNaN(dateValue.getTime())) {
     const pad = (n) => (n < 10 ? "0" + n : n);
     formattedValue = `${dateValue.getFullYear()}-${pad(dateValue.getMonth() + 1)}-${pad(
-      dateValue.getDate()
+      dateValue.getDate(),
     )} ${pad(dateValue.getHours())}:${pad(dateValue.getMinutes())}`;
   }
 
@@ -247,7 +272,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#333",
   },
-
 });
 
 export default Form;
