@@ -109,7 +109,7 @@ const ProfileScreen = ({ navigation, onLogout }) => {
               paddingBottom: (insets.bottom ?? 0) + TAB_BAR_HEIGHT + 32,
             }}
           >
-            <ProfileView profile={profile} />
+            <ProfileView profile={profile} circularAvatar={true} />
 
             <View style={styles.actions}>
               <Button

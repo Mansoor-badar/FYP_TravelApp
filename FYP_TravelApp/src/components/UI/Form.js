@@ -49,6 +49,7 @@ const Form = ({ children, onSubmit, onCancel, submitLabel = "Submit" }) => {
             icon={<Icons.Submit size={16} color="#fff" />}
             onPress={onSubmit}
             variant="primary"
+            styleButton={{ flex: 1 }}
           />
           {onCancel && (
             <Button
@@ -56,6 +57,7 @@ const Form = ({ children, onSubmit, onCancel, submitLabel = "Submit" }) => {
               icon={<Icons.Close size={16} color="#555" />}
               onPress={onCancel}
               variant="ghost"
+              styleButton={{ flex: 1 }}
             />
           )}
         </ButtonTray>
