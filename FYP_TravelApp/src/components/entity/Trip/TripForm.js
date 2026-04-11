@@ -29,6 +29,7 @@ const defaultTrip = {
   end_date: null,
   host_rules: "",
   is_public: true,
+  number_of_participants: "",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -103,6 +104,10 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
       ...(trip.start_date && { start_date: trip.start_date }),
       ...(trip.end_date && { end_date: trip.end_date }),
       ...(trip.host_rules.trim() && { host_rules: trip.host_rules.trim() }),
+      ...(trip.number_of_participants !== "" &&
+        trip.number_of_participants !== null && {
+          number_of_participants: parseInt(trip.number_of_participants, 10),
+        }),
     };
 
     // Only include host_id when creating a new trip; require user to be logged in
@@ -120,7 +125,7 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
     setSaving(true);
     let result;
     if (originalTrip?.id) {
-      result = await API.put(
+      result = await API.patch(
         `/rest/v1/trips?id=eq.${originalTrip.id}`,
         payload,
       );
@@ -296,6 +301,19 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
         value={trip.host_rules}
         onChange={(v) => handleChange("host_rules", v)}
         placeholder="e.g. No smoking, no late arrivals"
+      />
+
+      <Form.InputText
+        label="Number of Participants"
+        value={
+          trip.number_of_participants !== null &&
+          trip.number_of_participants !== undefined
+            ? String(trip.number_of_participants)
+            : ""
+        }
+        onChange={(v) => handleChange("number_of_participants", v)}
+        placeholder="e.g. 4"
+        keyboardType="numeric"
       />
 
       {/* is_public toggle */}

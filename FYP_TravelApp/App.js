@@ -13,6 +13,9 @@ import TravelGuideScreen from "./src/components/screens/TravelGuideScreen";
 import ProfileScreen from "./src/components/screens/ProfileScreen";
 import AddTipScreen from "./src/components/screens/tip/AddTipScreen";
 import ModifyTipScreen from "./src/components/screens/tip/ModifyTipScreen";
+import TripAddScreen from "./src/components/screens/trip/TripAddScreen";
+import TripModifyScreen from "./src/components/screens/trip/TripModifyScreen";
+import TripViewScreen from "./src/components/screens/trip/TripViewScreen";
 import BottomNavBar from "./src/components/UI/BottomNavBar";
 
 const Stack = createNativeStackNavigator();
@@ -47,6 +50,10 @@ export default function App() {
           <Stack.Screen name="AddProfile" component={AddProfileScreen} />
           <Stack.Screen name="AddTip" component={AddTipScreen} />
           <Stack.Screen name="ModifyTip" component={ModifyTipScreen} />
+          {/* Trip screens — pushed from HomeScreen */}
+          <Stack.Screen name="TripView" component={TripViewScreen} />
+          <Stack.Screen name="TripAdd" component={TripAddScreen} />
+          <Stack.Screen name="TripModify" component={TripModifyScreen} />
 
           {/* Authenticated app — Tab navigator with BottomNavBar */}
           <Stack.Screen name="MainTabs" component={MainTabs} />

@@ -19,7 +19,7 @@ const formatDate = (iso) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const TripView = ({ trip, compact = false, onPress }) => {
+const TripView = ({ trip, compact = false, participantCount, onPress }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [addVisible, setAddVisible] = useState(false);
@@ -58,14 +58,22 @@ const TripView = ({ trip, compact = false, onPress }) => {
       <Pressable onPress={() => onPress?.(trip)} style={styles.card}>
         <View style={styles.headerRow}>
           <Text style={styles.cardTitle}>{trip.title || "—"}</Text>
-          <Text
-            style={[
-              styles.visibility,
-              trip.is_public ? styles.public : styles.private,
-            ]}
-          >
-            {trip.is_public ? "Public" : "Private"}
-          </Text>
+          <View style={styles.badgeGroup}>
+            {participantCount != null &&
+              trip.number_of_participants != null && (
+                <Text style={styles.countBadge}>
+                  {participantCount}/{trip.number_of_participants}
+                </Text>
+              )}
+            <Text
+              style={[
+                styles.visibility,
+                trip.is_public ? styles.public : styles.private,
+              ]}
+            >
+              {trip.is_public ? "Public" : "Private"}
+            </Text>
+          </View>
         </View>
 
         {!!trip.destination && (
@@ -83,6 +91,13 @@ const TripView = ({ trip, compact = false, onPress }) => {
             <Text style={styles.meta}>{trip.budget_category}</Text>
           )}
           {dateRange && <Text style={styles.meta}>{dateRange}</Text>}
+          {trip.number_of_participants != null && (
+            <Text style={styles.meta}>
+              {participantCount != null
+                ? `${participantCount}/${trip.number_of_participants} joined`
+                : `max ${trip.number_of_participants}`}
+            </Text>
+          )}
         </View>
       </Pressable>
     );
@@ -120,6 +135,11 @@ const TripView = ({ trip, compact = false, onPress }) => {
         )}
         {!!trip.host_rules && (
           <Text style={styles.bodyText}>Host Rules: {trip.host_rules}</Text>
+        )}
+        {trip.number_of_participants != null && (
+          <Text style={styles.bodyText}>
+            Participants: {trip.number_of_participants}
+          </Text>
         )}
         <Text style={styles.bodyText}>
           Visibility: {trip.is_public ? "Public" : "Private"}
@@ -215,6 +235,20 @@ const styles = StyleSheet.create({
   description: { fontSize: 14, color: "#333", marginBottom: 8 },
   metaRow: { flexDirection: "row", gap: 12 },
   meta: { fontSize: 12, color: "#777" },
+  badgeGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  countBadge: {
+    fontSize: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontWeight: "700",
+    color: "#fff",
+    backgroundColor: "#555",
+  },
   visibility: {
     fontSize: 12,
     paddingHorizontal: 8,
