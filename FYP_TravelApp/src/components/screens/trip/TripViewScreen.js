@@ -90,6 +90,8 @@ const TripViewScreen = ({ navigation, route }) => {
 
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [modalReviews, setModalReviews] = useState(null);
+  const [loadingModalReviews, setLoadingModalReviews] = useState(false);
 
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -292,10 +294,46 @@ const TripViewScreen = ({ navigation, route }) => {
 
   // ── Profile modal ──────────────────────────────────────────────────────────
 
-  const handleViewProfile = (profile) => {
+  const handleViewProfile = async (profile) => {
     if (!profile) return;
     setSelectedProfile(profile);
+    setModalReviews(null);
     setShowProfileModal(true);
+
+    // Fetch reviews for the selected profile
+    setLoadingModalReviews(true);
+    const reviewsRes = await API.get(
+      `/rest/v1/reviews?target_user_id=eq.${profile.id}&select=*&order=created_at.desc`,
+    );
+    const reviews =
+      reviewsRes.isSuccess && Array.isArray(reviewsRes.result)
+        ? reviewsRes.result
+        : [];
+
+    if (reviews.length === 0) {
+      setModalReviews([]);
+      setLoadingModalReviews(false);
+      return;
+    }
+
+    // Batch-fetch reviewer profiles
+    const reviewerIds = [...new Set(reviews.map((r) => r.reviewer_id))];
+    const profilesRes = await API.get(
+      `/rest/v1/users?id=in.(${reviewerIds.join(",")})&select=*`,
+    );
+    const profiles =
+      profilesRes.isSuccess && Array.isArray(profilesRes.result)
+        ? profilesRes.result
+        : [];
+    const profileMap = Object.fromEntries(profiles.map((p) => [p.id, p]));
+
+    setModalReviews(
+      reviews.map((r) => ({
+        ...r,
+        reviewer: profileMap[r.reviewer_id] ?? null,
+      })),
+    );
+    setLoadingModalReviews(false);
   };
 
   // ── Render helpers ─────────────────────────────────────────────────────────
@@ -575,7 +613,18 @@ const TripViewScreen = ({ navigation, route }) => {
       <Modal visible={showProfileModal} animationType="slide">
         <SafeAreaView style={styles.modalContainer}>
           <ScrollView contentContainerStyle={styles.modalScroll}>
-            <ProfileView profile={selectedProfile} circularAvatar />
+            <ProfileView
+              profile={selectedProfile}
+              circularAvatar
+              reviews={modalReviews}
+            />
+            {loadingModalReviews && (
+              <ActivityIndicator
+                size="small"
+                color="#888"
+                style={styles.reviewsLoader}
+              />
+            )}
           </ScrollView>
           <Button
             label="Close"
@@ -740,6 +789,7 @@ const styles = StyleSheet.create({
   modalContainer: { flex: 1, backgroundColor: "#fff" },
   modalScroll: { paddingHorizontal: 20, paddingVertical: 16 },
   modalClose: { margin: 16 },
+  reviewsLoader: { marginTop: 12, marginBottom: 8 },
 });
 
 export default TripViewScreen;
