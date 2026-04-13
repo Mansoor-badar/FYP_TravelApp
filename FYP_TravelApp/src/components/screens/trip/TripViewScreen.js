@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -15,17 +16,9 @@ import API from "../../API/API";
 import Button, { ButtonTray } from "../../UI/Button";
 import { ProfileCard } from "../../entity/Profile/ProfileView";
 import ProfileView from "../../entity/Profile/ProfileView";
-import { ItineraryItemPopup } from "../../UI/ItineraryItems";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const formatDate = (iso) => {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const pad = (n) => (n < 10 ? "0" + n : n);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
+import CountdownTimer from "../../UI/CountdownTimer";
+import { formatDate, endOfUTCDay } from "../../../utils/DateUtils";
+import ItineraryItemView from "../../entity/ItineraryItem/ItineraryItemView";
 
 // ── Participant card (grid item) ──────────────────────────────────────────────
 
@@ -86,7 +79,6 @@ const TripViewScreen = ({ navigation, route }) => {
 
   const [itineraryItems, setItineraryItems] = useState([]);
   const [loadingItinerary, setLoadingItinerary] = useState(false);
-  const [showAddActivity, setShowAddActivity] = useState(false);
 
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -158,9 +150,15 @@ const TripViewScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     fetchParticipants();
-    fetchItinerary();
     fetchHostProfile();
-  }, [fetchParticipants, fetchItinerary, fetchHostProfile]);
+  }, [fetchParticipants, fetchHostProfile]);
+
+  // Refetch itinerary when screen comes back into focus (e.g. after ItineraryAddScreen)
+  useFocusEffect(
+    useCallback(() => {
+      fetchItinerary();
+    }, [fetchItinerary]),
+  );
 
   // ── Derived data ───────────────────────────────────────────────────────────
 
@@ -173,6 +171,16 @@ const TripViewScreen = ({ navigation, route }) => {
   const canSeeMembers =
     isHost || myParticipation?.status === "accepted" || trip.is_public;
 
+  // ── Trip state helpers ────────────────────────────────────────────────────
+
+  const now = new Date();
+  const tripStarted = !!trip?.start_date && new Date(trip.start_date) <= now;
+  // Use end-of-UTC-day so a trip ending "today" stays active for the full day
+  const tripEnded = (() => {
+    const eod = endOfUTCDay(trip?.end_date);
+    return !!eod && eod < now;
+  })();
+
   // ── Participant actions ────────────────────────────────────────────────────
 
   const handleJoinOrRequest = async () => {
@@ -181,16 +189,52 @@ const TripViewScreen = ({ navigation, route }) => {
       return;
     }
     setActionLoading(true);
+
+    // One-trip-at-a-time: block if user is already accepted in any trip that hasn't ended.
+    // Pending requests don't count — only a confirmed acceptance blocks.
+    const existingRes = await API.get(
+      `/rest/v1/participants?user_id=eq.${userId}&status=eq.accepted&select=trip_id`,
+    );
+    if (
+      existingRes.isSuccess &&
+      Array.isArray(existingRes.result) &&
+      existingRes.result.length > 0
+    ) {
+      const existingTripIds = existingRes.result.map((p) => p.trip_id);
+      const tripsRes = await API.get(
+        `/rest/v1/trips?id=in.(${existingTripIds.join(",")})&select=id,start_date,end_date`,
+      );
+      if (tripsRes.isSuccess && Array.isArray(tripsRes.result)) {
+        // Block whether the overlapping trip has started or not — only allow once it ends
+        const hasActiveTrip = tripsRes.result.some((t) => {
+          const eod = endOfUTCDay(t.end_date);
+          return !eod || eod >= now;
+        });
+        if (hasActiveTrip) {
+          setActionLoading(false);
+          Alert.alert(
+            "One Trip at a Time",
+            "You are already in an active trip. Please leave it or wait for it to end before joining another.",
+          );
+          return;
+        }
+      }
+    }
+
+    // Public trips: join immediately. Private trips: send a pending request for host approval.
+    const joinStatus = trip.is_public ? "accepted" : "pending";
     const res = await API.post(`/rest/v1/participants`, {
       trip_id: trip.id,
       user_id: userId,
-      status: trip.is_public ? "accepted" : "pending",
+      status: joinStatus,
     });
     setActionLoading(false);
     if (res.isSuccess) {
       Alert.alert(
         "Success",
-        trip.is_public ? "You have joined the trip!" : "Join request sent!",
+        trip.is_public
+          ? "You have joined the trip!"
+          : "Your join request has been sent to the host!",
       );
       fetchParticipants();
     } else {
@@ -396,6 +440,16 @@ const TripViewScreen = ({ navigation, route }) => {
           <Text style={styles.description}>{trip.description}</Text>
         )}
 
+        {/* ── Countdown timer (host + accepted members only) ── */}
+        {(isHost || myParticipation?.status === "accepted") && (
+          <CountdownTimer
+            startDate={trip.start_date}
+            endDate={trip.end_date}
+            startLabel="Trip starts in"
+            endLabel="Trip ends in"
+          />
+        )}
+
         {(trip.budget_category ||
           trip.primary_purpose ||
           trip.host_rules ||
@@ -430,9 +484,11 @@ const TripViewScreen = ({ navigation, route }) => {
           </View>
         )}
 
-        {/* ── Join / Request to Join (non-member, non-host) ── */}
+        {/* ── Join / Request to Join (non-member, non-host, trip not yet started) ── */}
+        {/* Public trips: join immediately. Private trips: send request for host approval. */}
         {!isHost &&
-          (!myParticipation || myParticipation.status === "rejected") && (
+          (!myParticipation || myParticipation.status === "rejected") &&
+          !tripStarted && (
             <Button
               label={trip.is_public ? "Join Trip" : "Request to Join"}
               variant="primary"
@@ -442,16 +498,25 @@ const TripViewScreen = ({ navigation, route }) => {
             />
           )}
 
-        {/* ── Leave Trip (accepted participant) ── */}
-        {!isHost && myParticipation?.status === "accepted" && (
-          <Button
-            label="Leave Trip"
-            variant="danger"
-            loading={actionLoading}
-            onClick={handleLeaveTrip}
-            styleButton={styles.actionBtn}
-          />
-        )}
+        {/* ── Leave Trip / In-progress notice (accepted participant) ── */}
+        {!isHost &&
+          myParticipation?.status === "accepted" &&
+          !tripEnded &&
+          (tripStarted ? (
+            <View style={[styles.statusBanner, styles.statusStarted]}>
+              <Text style={styles.statusText}>
+                ⚠ Trip is in progress — you cannot leave now
+              </Text>
+            </View>
+          ) : (
+            <Button
+              label="Leave Trip"
+              variant="danger"
+              loading={actionLoading}
+              onClick={handleLeaveTrip}
+              styleButton={styles.actionBtn}
+            />
+          ))}
 
         {/* ── Itinerary (host or accepted participant) ── */}
         {(isHost || myParticipation?.status === "accepted") && (
@@ -463,39 +528,34 @@ const TripViewScreen = ({ navigation, route }) => {
               <Text style={styles.empty}>No activities planned yet.</Text>
             ) : (
               itineraryItems.map((it, idx) => (
-                <View key={it.id ?? idx} style={styles.itRow}>
-                  <Text style={styles.itIndex}>{idx + 1}.</Text>
-                  <View style={styles.itInfo}>
-                    <Text style={styles.itName}>{it.activity_name}</Text>
-                    {!!it.start_time && (
-                      <Text style={styles.itTime}>{it.start_time}</Text>
-                    )}
-                  </View>
-                </View>
+                <ItineraryItemView
+                  key={it.id ?? idx}
+                  item={it}
+                  index={idx}
+                  isHost={isHost}
+                  listItem
+                  onModify={(updated) =>
+                    setItineraryItems((prev) =>
+                      prev.map((x) => (x.id === updated.id ? updated : x)),
+                    )
+                  }
+                  onDelete={(deleted) =>
+                    setItineraryItems((prev) =>
+                      prev.filter((x) => x.id !== deleted.id),
+                    )
+                  }
+                />
               ))
             )}
             {isHost && (
-              <>
-                <Button
-                  label="+ Add Activity"
-                  variant="secondary"
-                  onClick={() => setShowAddActivity(true)}
-                  styleButton={{ marginTop: 10 }}
-                />
-                <ItineraryItemPopup
-                  visible={showAddActivity}
-                  onClose={() => setShowAddActivity(false)}
-                  item={null}
-                  tripId={trip.id}
-                  onModify={(newItem) => {
-                    setItineraryItems((prev) => [...prev, newItem]);
-                    setShowAddActivity(false);
-                  }}
-                  onDelete={() => {}}
-                  readOnly={false}
-                  createMode
-                />
-              </>
+              <Button
+                label="+ Add Activity"
+                variant="secondary"
+                onClick={() =>
+                  navigation.navigate("ItineraryAdd", { tripId: trip.id })
+                }
+                styleButton={{ marginTop: 10 }}
+              />
             )}
           </View>
         )}
@@ -703,6 +763,7 @@ const styles = StyleSheet.create({
   statusAccepted: { backgroundColor: "#e6f4ea" },
   statusPending: { backgroundColor: "#fff8e1" },
   statusRejected: { backgroundColor: "#fce8e8" },
+  statusStarted: { backgroundColor: "#fff3e0" },
   statusText: { fontSize: 14, fontWeight: "600", color: "#333" },
 
   // Action button

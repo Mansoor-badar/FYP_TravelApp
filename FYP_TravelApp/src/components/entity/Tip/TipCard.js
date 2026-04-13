@@ -1,14 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View, Image } from "react-native";
 import API from "../../API/API";
-
-const formatDate = (iso) => {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const pad = (n) => (n < 10 ? "0" + n : n);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
+import { formatDate } from "../../../utils/DateUtils";
 
 /**
  * TipCard
@@ -147,13 +140,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     fontWeight: "700",
   },
-  hiddenGem: { color: "#fff", backgroundColor: "#FF5722" },
+  hiddenGem: { color: "#fff", backgroundColor: "#2df71f" },
   editButton: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#007AFF",
+    borderColor: "#70b5ff",
     backgroundColor: "#fff",
   },
   editText: { color: "#007AFF", fontWeight: "700", fontSize: 12 },
