@@ -11,6 +11,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import Button from "../UI/Button";
 import API from "../API/API";
 import TripView from "../entity/Trip/TripView";
+import PastTripView from "../entity/Trip/PastTripView";
+import { endOfUTCDay } from "../../utils/DateUtils";
 
 const HomeScreen = ({ navigation }) => {
   const [trips, setTrips] = useState([]);
@@ -79,23 +81,37 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const userId = global.UserID ?? null;
+  const now = new Date();
 
-  // Trip IDs where the current user is a participant (not host)
   const participantTripIds = new Set(myParticipations.map((p) => p.trip_id));
 
-  // My Trips = trips I host + trips I have a pending/accepted record for
-  const myTrips = trips.filter(
-    (t) => t.host_id === userId || participantTripIds.has(t.id),
-  );
+  // Whether the current user is involved (host or participant) in a trip
+  const isMine = (t) => t.host_id === userId || participantTripIds.has(t.id);
 
-  // Available = all trips where I am neither host nor already a participant
+  // Whether a trip has ended — use end-of-UTC-day so a trip set to end
+  // "today" stays active for the full calendar day regardless of what time
+  // the timestamptz was recorded at.
+  const isEnded = (t) => {
+    const eod = endOfUTCDay(t.end_date);
+    return !!eod && eod < now;
+  };
+
+  // My active/upcoming trips (involved + not ended)
+  const myActiveTrips = trips.filter((t) => isMine(t) && !isEnded(t));
+
+  // My past trips (involved + ended) → shown at the bottom, review-only
+  const myPastTrips = trips.filter((t) => isMine(t) && isEnded(t));
+
+  // Available trips: any trip not yet started that the user isn't involved in.
+  // Both public and private trips are shown — private ones allow a "Request to Join"
+  // flow through TripViewScreen so the host can approve/reject.
   const availableTrips = trips.filter(
-    (t) => t.host_id !== userId && !participantTripIds.has(t.id),
+    (t) => !isMine(t) && t.start_date && new Date(t.start_date) > now,
   );
 
   // Helper: get participation status label for a trip card
   const participationLabel = (trip) => {
-    if (trip.host_id === userId) return null; // I'm the host, no status needed
+    if (trip.host_id === userId) return null;
     const p = myParticipations.find((r) => r.trip_id === trip.id);
     if (!p) return null;
     if (p.status === "accepted") return "Joined";
@@ -128,10 +144,10 @@ const HomeScreen = ({ navigation }) => {
           >
             {/* My Trips */}
             <Text style={styles.sectionHeader}>My Trips</Text>
-            {myTrips.length === 0 ? (
-              <Text style={styles.emptyHint}>You have no trips yet.</Text>
+            {myActiveTrips.length === 0 ? (
+              <Text style={styles.emptyHint}>You have no active trips.</Text>
             ) : (
-              myTrips.map((t) => {
+              myActiveTrips.map((t) => {
                 const statusLabel = participationLabel(t);
                 return (
                   <View key={t.id}>
@@ -158,10 +174,12 @@ const HomeScreen = ({ navigation }) => {
               })
             )}
 
-            {/* Available Trips */}
+            {/* Available Trips — only upcoming (not yet started) public trips */}
             <Text style={styles.sectionHeader}>Available Trips</Text>
             {availableTrips.length === 0 ? (
-              <Text style={styles.emptyHint}>No trips available to join.</Text>
+              <Text style={styles.emptyHint}>
+                No upcoming trips available to join.
+              </Text>
             ) : (
               availableTrips.map((t) => (
                 <TripView
@@ -172,6 +190,16 @@ const HomeScreen = ({ navigation }) => {
                   onPress={handleOpenTrip}
                 />
               ))
+            )}
+
+            {/* Past Trips — ended trips the user was involved in */}
+            {myPastTrips.length > 0 && (
+              <>
+                <Text style={styles.sectionHeader}>Past Trips</Text>
+                {myPastTrips.map((t) => (
+                  <PastTripView key={t.id} trip={t} userId={userId} />
+                ))}
+              </>
             )}
           </ScrollView>
         )}

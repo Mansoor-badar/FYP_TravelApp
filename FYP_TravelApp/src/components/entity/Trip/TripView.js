@@ -8,16 +8,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import Button from "../../UI/Button";
-import { ItineraryItemPopup } from "../../UI/ItineraryItems";
+import { ItineraryItemPopup } from "../ItineraryItem/ItineraryItemView";
 import API from "../../API/API";
-
-const formatDate = (iso) => {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const pad = (n) => (n < 10 ? "0" + n : n);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
+import { formatDate } from "../../../utils/DateUtils";
 
 const TripView = ({ trip, compact = false, participantCount, onPress }) => {
   const [items, setItems] = useState([]);
