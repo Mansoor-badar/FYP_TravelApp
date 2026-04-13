@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, Image, StyleSheet, Text, View } from "react-native";
+import ReviewList from "../review/ReviewList";
 
 /**
  * ProfileIcon
@@ -64,7 +65,7 @@ export const ProfileCard = ({ profile, onPress }) => {
  * Props:
  *   profile – profile object to display.
  */
-const ProfileView = ({ profile, circularAvatar = false }) => {
+const ProfileView = ({ profile, circularAvatar = false, reviews = null }) => {
   if (!profile) return null;
   // Initialisations
   const fullName =
@@ -162,6 +163,16 @@ const ProfileView = ({ profile, circularAvatar = false }) => {
               {socialLinks.twitter}
             </Text>
           )}
+        </View>
+      )}
+
+      {/* Reviews section — only rendered when the parent passes reviews */}
+      {reviews !== null && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>
+            Reviews{reviews.length > 0 ? ` (${reviews.length})` : ""}
+          </Text>
+          <ReviewList reviews={reviews} />
         </View>
       )}
     </View>

@@ -21,8 +21,42 @@ const ProfileScreen = ({ navigation, onLogout }) => {
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [ownReviews, setOwnReviews] = useState(null);
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = 90; // approximate height of the floating tab bar
+
+  const fetchOwnReviews = async (userId) => {
+    const reviewsRes = await API.get(
+      `/rest/v1/reviews?target_user_id=eq.${userId}&select=*&order=created_at.desc`,
+    );
+    const reviews =
+      reviewsRes.isSuccess && Array.isArray(reviewsRes.result)
+        ? reviewsRes.result
+        : [];
+
+    if (reviews.length === 0) {
+      setOwnReviews([]);
+      return;
+    }
+
+    // Batch-fetch reviewer profiles
+    const reviewerIds = [...new Set(reviews.map((r) => r.reviewer_id))];
+    const profilesRes = await API.get(
+      `/rest/v1/users?id=in.(${reviewerIds.join(",")})&select=*`,
+    );
+    const profiles =
+      profilesRes.isSuccess && Array.isArray(profilesRes.result)
+        ? profilesRes.result
+        : [];
+    const profileMap = Object.fromEntries(profiles.map((p) => [p.id, p]));
+
+    setOwnReviews(
+      reviews.map((r) => ({
+        ...r,
+        reviewer: profileMap[r.reviewer_id] ?? null,
+      })),
+    );
+  };
 
   const fetchProfile = async () => {
     const userId = global.UserID ?? null;
@@ -50,7 +84,9 @@ const ProfileScreen = ({ navigation, onLogout }) => {
   };
 
   useEffect(() => {
+    const userId = global.UserID ?? null;
     fetchProfile();
+    if (userId) fetchOwnReviews(userId);
   }, []);
 
   const handleProfileUpdated = () => {
@@ -109,7 +145,11 @@ const ProfileScreen = ({ navigation, onLogout }) => {
               paddingBottom: (insets.bottom ?? 0) + TAB_BAR_HEIGHT + 32,
             }}
           >
-            <ProfileView profile={profile} circularAvatar={true} />
+            <ProfileView
+              profile={profile}
+              circularAvatar={true}
+              reviews={ownReviews}
+            />
 
             <View style={styles.actions}>
               <Button
