@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { formatDateTime } from "../../../utils/DateUtils";
 import CountdownTimer from "../../UI/CountdownTimer";
@@ -103,19 +104,38 @@ export const ItineraryItemPopup = ({
     if (onModify) onModify(updatedItem);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!data?.id) return;
-    try {
-      const result = await API.delete(
-        `/rest/v1/itinerary_items?id=eq.${data.id}`,
-      );
-      if (result.isSuccess) {
-        if (onDelete) onDelete(data);
-        onClose();
-      }
-    } catch (e) {
-      console.error("Delete error:", e);
-    }
+    Alert.alert(
+      "Delete Activity",
+      "Are you sure you want to delete this activity? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const result = await API.delete(
+                `/rest/v1/itinerary_items?id=eq.${data.id}`,
+              );
+              if (result.isSuccess) {
+                if (onDelete) onDelete(data);
+                onClose();
+              } else {
+                Alert.alert(
+                  "Error",
+                  result.message || "Could not delete activity. Please try again.",
+                );
+              }
+            } catch (e) {
+              console.error("Delete error:", e);
+              Alert.alert("Error", "An unexpected error occurred.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   React.useEffect(() => {
@@ -163,7 +183,7 @@ export const ItineraryItemPopup = ({
                   <>
                     <ItineraryItemDetail item={data} />
                     <ButtonTray style={styles.actionTray}>
-                      {hasCoords && (
+                      {hasCoords && onNavigate && (
                         <Button
                           label="Navigate"
                           variant="primary"
