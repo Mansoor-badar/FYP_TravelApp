@@ -18,6 +18,7 @@ import TripModifyScreen from "./src/components/screens/trip/TripModifyScreen";
 import TripViewScreen from "./src/components/screens/trip/TripViewScreen";
 import ItineraryAddScreen from "./src/components/screens/itinerary/ItineraryAddScreen";
 import ItineraryModifyScreen from "./src/components/screens/itinerary/ItineraryModifyScreen";
+import AddPollScreen from "./src/components/screens/poll/AddPollScreen";
 import BottomNavBar from "./src/components/UI/BottomNavBar";
 
 const Stack = createNativeStackNavigator();
@@ -62,6 +63,8 @@ export default function App() {
             name="ItineraryModify"
             component={ItineraryModifyScreen}
           />
+          {/* Poll screens — pushed from GroupScreen */}
+          <Stack.Screen name="AddPoll" component={AddPollScreen} />
 
           {/* Authenticated app — Tab navigator with BottomNavBar */}
           <Stack.Screen name="MainTabs" component={MainTabs} />
