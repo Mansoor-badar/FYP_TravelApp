@@ -13,6 +13,8 @@ import API from "../API/API";
 import Button from "../UI/Button";
 import PollList from "../entity/Poll/PollList";
 import { PollPopup } from "../entity/Poll/PollView";
+import ExpenseList from "../entity/Expense/ExpenseList";
+import { ExpensePopup } from "../entity/Expense/ExpenseView";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,17 @@ const GroupScreen = ({ navigation }) => {
   // ── Per-session vote tracking (which poll IDs the user has voted in) ────
   const votedPollIdsRef = useRef(new Set());
   const [votedPollIds, setVotedPollIds] = useState(new Set());
+
+  // ── Expenses for the selected trip ──────────────────────────────────────
+  const [expenses, setExpenses] = useState([]);
+  const [loadingExpenses, setLoadingExpenses] = useState(false);
+
+  // ── Expense popup ────────────────────────────────────────────────────────
+  const [selectedExpense, setSelectedExpense] = useState(null);
+  const [showExpensePopup, setShowExpensePopup] = useState(false);
+
+  // ── Trip members (for expense form) ─────────────────────────────────────
+  const [tripMembers, setTripMembers] = useState([]);
 
   // ─── Derived: currently selected trip entry ───────────────────────────────
   const selectedEntry = myTrips[selectedTripIndex] ?? null;
@@ -169,6 +182,120 @@ const GroupScreen = ({ navigation }) => {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
+  // fetchTripMembers
+  //   Loads full profile objects for every accepted participant + host.
+  //   Passes [{ id (=user_id), first_name, last_name, username, profile_image_url, ... }]
+  //   to AddExpenseScreen so ProfileCard can render each member properly.
+  // ─────────────────────────────────────────────────────────────────────────
+  const fetchTripMembers = useCallback(async (trip) => {
+    if (!trip) {
+      setTripMembers([]);
+      return;
+    }
+
+    // Fetch accepted participants
+    const partRes = await API.get(
+      `/rest/v1/participants?trip_id=eq.${trip.id}&status=eq.accepted&select=user_id`
+    );
+    const participantIds =
+      partRes.isSuccess && Array.isArray(partRes.result)
+        ? partRes.result.map((p) => p.user_id)
+        : [];
+
+    // Include the host
+    const allIds = [...new Set([trip.host_id, ...participantIds])];
+
+    // Fetch FULL profiles for each member
+    const profiles = await Promise.all(
+      allIds.map(async (uid) => {
+        const pRes = await API.get(
+          `/rest/v1/users?id=eq.${uid}&select=*`
+        );
+        if (pRes.isSuccess && pRes.result) {
+          const row = Array.isArray(pRes.result) ? pRes.result[0] : pRes.result;
+          // Attach `id` so ExpenseForm can use member.id as the UUID key
+          return row ? { ...row, id: uid } : { id: uid };
+        }
+        return { id: uid };
+      })
+    );
+
+    setTripMembers(profiles.filter(Boolean));
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // fetchExpenses
+  //   Loads all expense rows for a trip, then enriches each row with full
+  //   payerProfile and debtorProfile objects (for ProfileCard display in
+  //   ExpenseView and ExpenseItem).
+  // ─────────────────────────────────────────────────────────────────────────
+  const fetchExpenses = useCallback(async (tripId) => {
+    if (!tripId) {
+      setExpenses([]);
+      return;
+    }
+    setLoadingExpenses(true);
+
+    const expRes = await API.get(
+      `/rest/v1/expenses?trip_id=eq.${tripId}&select=*&order=created_at.desc`
+    );
+
+    if (!expRes.isSuccess) {
+      console.warn("fetchExpenses error:", expRes.message);
+      setExpenses([]);
+      setLoadingExpenses(false);
+      return;
+    }
+
+    const rows = Array.isArray(expRes.result)
+      ? expRes.result
+      : expRes.result
+      ? [expRes.result]
+      : [];
+
+    if (rows.length === 0) {
+      setExpenses([]);
+      setLoadingExpenses(false);
+      return;
+    }
+
+    // Collect unique user IDs and fetch their FULL profiles
+    const userIds = [...new Set(rows.flatMap((r) => [r.payer_id, r.debtor_id].filter(Boolean)))];
+    const profileMap = {};
+    await Promise.all(
+      userIds.map(async (uid) => {
+        const pRes = await API.get(
+          `/rest/v1/users?id=eq.${uid}&select=*`
+        );
+        if (pRes.isSuccess && pRes.result) {
+          const row = Array.isArray(pRes.result) ? pRes.result[0] : pRes.result;
+          if (row) profileMap[uid] = { ...row, id: uid };
+        }
+      })
+    );
+
+    // Derive flat display names for ExpenseItem (preview cards)
+    const displayName = (uid) => {
+      const p = profileMap[uid];
+      if (!p) return null;
+      const full = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim();
+      return full || p.username || null;
+    };
+
+    const enriched = rows.map((r) => ({
+      ...r,
+      payerProfile: profileMap[r.payer_id] ?? null,
+      debtorProfile: profileMap[r.debtor_id] ?? null,
+      // Flat names kept for ExpenseItem preview cards
+      payerName: displayName(r.payer_id),
+      debtorName: displayName(r.debtor_id),
+    }));
+
+    setExpenses(enriched);
+    setLoadingExpenses(false);
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Effects
   //
   // useFocusEffect → re-fetch trips every time the screen gains focus.
@@ -193,7 +320,9 @@ const GroupScreen = ({ navigation }) => {
     const entry = myTrips[selectedTripIndex] ?? null;
     const tripId = entry?.trip?.id ?? null;
     fetchPolls(tripId);
-  }, [myTrips, selectedTripIndex, fetchPolls]);
+    fetchExpenses(tripId);
+    fetchTripMembers(entry?.trip ?? null);
+  }, [myTrips, selectedTripIndex, fetchPolls, fetchExpenses, fetchTripMembers]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
@@ -228,6 +357,38 @@ const GroupScreen = ({ navigation }) => {
 
   const canDeletePoll =
     selectedPoll?.created_by === userId || selectedTrip?.host_id === userId;
+
+  // ── Expense handlers ───────────────────────────────────────────────────────
+
+  const handleSelectExpense = (expense) => {
+    setSelectedExpense(expense);
+    setShowExpensePopup(true);
+  };
+
+  const handleExpenseStatusChange = (id, newStatus) => {
+    const update = (list) =>
+      list.map((e) =>
+        e.id === id ? { ...e, settlement_status: newStatus } : e
+      );
+    setExpenses(update);
+    setSelectedExpense((prev) =>
+      prev?.id === id ? { ...prev, settlement_status: newStatus } : prev
+    );
+  };
+
+  const handleExpenseSettled = (id) => {
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    setShowExpensePopup(false);
+    setSelectedExpense(null);
+  };
+
+  const handleExpenseDeleted = (id) => {
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    setShowExpensePopup(false);
+    setSelectedExpense(null);
+  };
+
+  const isHost = selectedTrip?.host_id === userId;
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -350,6 +511,43 @@ const GroupScreen = ({ navigation }) => {
                 )}
               </View>
             )}
+
+            {/* ── Expenses section ── */}
+            {selectedTrip && (
+              <View style={styles.expensesSection}>
+                {/* Header row: label + add button */}
+                <View style={styles.pollsHeader}>
+                  <Text style={styles.sectionLabel}>Expenses</Text>
+                  <Button
+                    label="＋ New Expense"
+                    variant="secondary"
+                    onClick={() =>
+                      navigation.navigate("AddExpense", {
+                        tripId: selectedTrip.id,
+                        tripMembers,
+                      })
+                    }
+                    styleButton={styles.newPollBtn}
+                    styleLabel={styles.newPollBtnLabel}
+                  />
+                </View>
+
+                {/* Expense list or loading indicator */}
+                {loadingExpenses ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#000"
+                    style={{ marginTop: 16 }}
+                  />
+                ) : (
+                  <ExpenseList
+                    expenses={expenses}
+                    currentUserId={userId}
+                    onSelect={handleSelectExpense}
+                  />
+                )}
+              </View>
+            )}
           </ScrollView>
         )}
       </View>
@@ -367,6 +565,21 @@ const GroupScreen = ({ navigation }) => {
         onVoteCast={handleVoteCast}
         canDelete={canDeletePoll}
         onDeleted={handlePollDeleted}
+      />
+
+      {/* ── Expense detail popup (view + settle) ── */}
+      <ExpensePopup
+        visible={showExpensePopup}
+        onClose={() => {
+          setShowExpensePopup(false);
+          setSelectedExpense(null);
+        }}
+        expense={selectedExpense}
+        currentUserId={userId}
+        isHost={isHost}
+        onStatusChange={handleExpenseStatusChange}
+        onSettled={handleExpenseSettled}
+        onDeleted={handleExpenseDeleted}
       />
     </SafeAreaView>
   );
@@ -475,6 +688,16 @@ const styles = StyleSheet.create({
 
   // Polls section
   pollsSection: {
+    paddingTop: 16,
+    paddingHorizontal: 24,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    paddingBottom: 16,
+  },
+
+  // Expenses section
+  expensesSection: {
     paddingTop: 16,
     paddingHorizontal: 24,
     gap: 12,
