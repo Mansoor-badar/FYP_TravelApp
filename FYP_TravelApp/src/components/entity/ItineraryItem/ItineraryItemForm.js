@@ -85,9 +85,12 @@ const ItineraryItemForm = ({
     setSaving(true);
     let result;
     if (originalItem?.id) {
-      result = await API.put(
+      // Strip `id` from the body — PostgREST 12+ rejects primary-key fields
+      // in the request body when the same column is used in the URL filter.
+      const { id: _id, ...patchPayload } = payload;
+      result = await API.patch(
         `/rest/v1/itinerary_items?id=eq.${originalItem.id}`,
-        payload,
+        patchPayload,
       );
     } else {
       result = await API.post(`/rest/v1/itinerary_items`, payload);
