@@ -6,9 +6,11 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
+import * as DocumentPicker from "expo-document-picker";
 import API from "../API/API";
 import SafetyStatusAPI from "../API/SafetyStatusAPI";
 import Button from "../UI/Button";
@@ -17,6 +19,7 @@ import { PollPopup } from "../entity/Poll/PollView";
 import ExpenseList from "../entity/Expense/ExpenseList";
 import { ExpensePopup } from "../entity/Expense/ExpenseView";
 import { SosButton, SosAlertBanner } from "../entity/SOS/SosView";
+import DocumentDrawer from "../entity/Document/DocumentDrawer";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -67,6 +70,12 @@ const GroupScreen = ({ navigation }) => {
   // mySosRecord    – the current user's own row (or null)
   const [safetyStatuses, setSafetyStatuses] = useState([]);
   const [mySosRecord, setMySosRecord] = useState(null);
+
+  // ── Documents ─────────────────────────────────────────────────────────────
+  const [documents, setDocuments] = useState([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [showDocumentDrawer, setShowDocumentDrawer] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // ─── Derived: currently selected trip entry ───────────────────────────────
   const selectedEntry = myTrips[selectedTripIndex] ?? null;
@@ -232,6 +241,109 @@ const GroupScreen = ({ navigation }) => {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
+  // fetchDocuments
+  //   Loads all user_documents rows for the current user, ordered newest first.
+  // ─────────────────────────────────────────────────────────────────────────
+  const fetchDocuments = useCallback(async () => {
+    if (!userId) return;
+    setLoadingDocuments(true);
+    const res = await API.get(
+      `/rest/v1/user_documents?user_id=eq.${userId}&order=uploaded_at.desc`
+    );
+    if (res.isSuccess) {
+      const rows = Array.isArray(res.result)
+        ? res.result
+        : res.result
+        ? [res.result]
+        : [];
+      setDocuments(rows);
+    } else {
+      console.warn("fetchDocuments error:", res.message);
+    }
+    setLoadingDocuments(false);
+  }, [userId]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // handleUploadDocument
+  //   Opens the device document picker, uploads the chosen file to Supabase
+  //   Storage (bucket: user-documents), then inserts a metadata row into
+  //   user_documents.
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleUploadDocument = async () => {
+    // 1. Pick a file
+    let pickerResult;
+    try {
+      pickerResult = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+    } catch {
+      Alert.alert("Error", "Could not open document picker.");
+      return;
+    }
+
+    // Cancelled
+    if (pickerResult.canceled || !pickerResult.assets?.length) return;
+
+    const asset = pickerResult.assets[0];
+    const fileName = asset.name;
+    const mimeType = asset.mimeType ?? "application/octet-stream";
+    const storagePath = `${userId}/${Date.now()}_${fileName}`;
+
+    setUploading(true);
+
+    // 2. Read file as blob and upload to Supabase Storage
+    try {
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const apiKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/user-documents/${storagePath}`;
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          apikey: apiKey,
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": mimeType,
+        },
+        body: blob,
+      });
+
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text();
+        console.warn("Storage upload failed:", errText);
+        Alert.alert("Upload Failed", "Could not upload the file to storage.");
+        setUploading(false);
+        return;
+      }
+    } catch (err) {
+      Alert.alert("Upload Error", err.message || "Failed to upload file.");
+      setUploading(false);
+      return;
+    }
+
+    // 3. Insert metadata row into user_documents
+    const insertRes = await API.post(`/rest/v1/user_documents`, {
+      user_id: userId,
+      doc_name: fileName,
+      file_path: `user-documents/${storagePath}`,
+    });
+
+    setUploading(false);
+
+    if (!insertRes.isSuccess) {
+      Alert.alert("Error", insertRes.message || "Failed to save document record.");
+      return;
+    }
+
+    // 4. Refresh the documents list
+    fetchDocuments();
+    Alert.alert("Success", `"${fileName}" has been uploaded successfully.`);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   // fetchSafetyStatuses
   //   Loads all safety_status rows for the trip, then resolves the current
   //   user's own row so SosButton can display the correct state.
@@ -350,7 +462,8 @@ const GroupScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       fetchMyTrips();
-    }, [fetchMyTrips])
+      fetchDocuments();
+    }, [fetchMyTrips, fetchDocuments])
   );
 
   useEffect(() => {
@@ -428,6 +541,13 @@ const GroupScreen = ({ navigation }) => {
 
   const isHost = selectedTrip?.host_id === userId;
 
+  // ── Document handlers ─────────────────────────────────────────────────────
+
+  const handleSelectDocument = (doc) => {
+    setShowDocumentDrawer(false);
+    navigation.navigate("DocumentView", { document: doc });
+  };
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   if (!userId) {
@@ -449,6 +569,19 @@ const GroupScreen = ({ navigation }) => {
         {/* ── Page header ── */}
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>Group</Text>
+          <Pressable
+            onPress={() => setShowDocumentDrawer(true)}
+            style={({ pressed }) => [
+              styles.hamburgerBtn,
+              pressed && styles.hamburgerBtnPressed,
+            ]}
+            accessibilityLabel="Open documents"
+            hitSlop={8}
+          >
+            <View style={styles.hamburgerLine} />
+            <View style={[styles.hamburgerLine, styles.hamburgerLineMid]} />
+            <View style={styles.hamburgerLine} />
+          </Pressable>
         </View>
 
         {loadingTrips ? (
@@ -673,6 +806,17 @@ const GroupScreen = ({ navigation }) => {
         onSettled={handleExpenseSettled}
         onDeleted={handleExpenseDeleted}
       />
+
+      {/* ── Document drawer ── */}
+      <DocumentDrawer
+        visible={showDocumentDrawer}
+        onClose={() => setShowDocumentDrawer(false)}
+        documents={documents}
+        loading={loadingDocuments}
+        uploading={uploading}
+        onUpload={handleUploadDocument}
+        onSelect={handleSelectDocument}
+      />
     </SafeAreaView>
   );
 };
@@ -707,12 +851,42 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   pageTitle: {
     fontSize: 24,
     fontWeight: "700",
     color: "#111",
     marginTop: 12,
+  },
+
+  // Hamburger menu button
+  hamburgerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginTop: 10,
+    paddingVertical: 2,
+  },
+  hamburgerBtnPressed: {
+    backgroundColor: "#ebebeb",
+  },
+  hamburgerLine: {
+    width: 18,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "#333",
+  },
+  hamburgerLineMid: {
+    width: 13,
+    alignSelf: "flex-start",
+    marginLeft: 11,
   },
 
   // Scroll container

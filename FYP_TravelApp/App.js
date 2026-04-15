@@ -20,6 +20,7 @@ import ItineraryAddScreen from "./src/components/screens/itinerary/ItineraryAddS
 import ItineraryModifyScreen from "./src/components/screens/itinerary/ItineraryModifyScreen";
 import AddPollScreen from "./src/components/screens/poll/AddPollScreen";
 import AddExpenseScreen from "./src/components/screens/expense/AddExpenseScreen";
+import DocumentViewScreen from "./src/components/screens/document/DocumentViewScreen";
 import BottomNavBar from "./src/components/UI/BottomNavBar";
 
 const Stack = createNativeStackNavigator();
@@ -68,6 +69,8 @@ export default function App() {
           <Stack.Screen name="AddPoll" component={AddPollScreen} />
           {/* Expense screens — pushed from GroupScreen */}
           <Stack.Screen name="AddExpense" component={AddExpenseScreen} />
+          {/* Document screens — pushed from GroupScreen */}
+          <Stack.Screen name="DocumentView" component={DocumentViewScreen} />
 
           {/* Authenticated app — Tab navigator with BottomNavBar */}
           <Stack.Screen name="MainTabs" component={MainTabs} />
