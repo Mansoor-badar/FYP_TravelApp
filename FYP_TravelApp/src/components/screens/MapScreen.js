@@ -16,6 +16,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
 
 import API from "../API/API";
+import SafetyStatusAPI from "../API/SafetyStatusAPI";
 import { ItineraryItemPopup } from "../entity/ItineraryItem/ItineraryItemView";
 import TipCard from "../entity/Tip/TipCard";
 import Button from "../UI/Button";
@@ -213,6 +214,9 @@ const MapScreen = ({ navigation }) => {
   const [selectedItinerary, setSelectedItinerary] = useState(null);
   const [selectedTip, setSelectedTip] = useState(null);
 
+  // SOS markers
+  const [sosStatuses, setSosStatuses] = useState([]);
+
   // ── Request location permission & center map ───────────────────────────────
 
   useEffect(() => {
@@ -320,6 +324,19 @@ const MapScreen = ({ navigation }) => {
             setProfilesMap(map);
           }
         }
+      }
+
+      // Fetch active SOS markers for the user's trips
+      const memberTripIds = [...memberIds];
+      if (memberTripIds.length > 0) {
+        const sosRes = await SafetyStatusAPI.getActiveSosByTrips(memberTripIds);
+        if (sosRes.isSuccess && Array.isArray(sosRes.result)) {
+          setSosStatuses(sosRes.result);
+        } else {
+          setSosStatuses([]);
+        }
+      } else {
+        setSosStatuses([]);
       }
     } catch (e) {
       setError("Failed to load map data. Please try again.");
@@ -477,6 +494,20 @@ const MapScreen = ({ navigation }) => {
             }
             pinColor={tip.is_hidden_gem ? "#2df71f" : "#007AFF"}
             onPress={() => setSelectedTip(tip)}
+          />
+        ))}
+
+        {/* SOS emergency markers */}
+        {sosStatuses.map((s) => (
+          <Marker
+            key={`sos-${s.id}`}
+            coordinate={{
+              latitude: Number(s.last_lat),
+              longitude: Number(s.last_long),
+            }}
+            title="🆘 SOS ALERT"
+            description={`User in distress · ${Number(s.last_lat).toFixed(4)}, ${Number(s.last_long).toFixed(4)}`}
+            pinColor="#FF0000"
           />
         ))}
       </MapView>

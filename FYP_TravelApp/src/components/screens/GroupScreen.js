@@ -10,11 +10,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import API from "../API/API";
+import SafetyStatusAPI from "../API/SafetyStatusAPI";
 import Button from "../UI/Button";
 import PollList from "../entity/Poll/PollList";
 import { PollPopup } from "../entity/Poll/PollView";
 import ExpenseList from "../entity/Expense/ExpenseList";
 import { ExpensePopup } from "../entity/Expense/ExpenseView";
+import { SosButton, SosAlertBanner } from "../entity/SOS/SosView";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -59,6 +61,12 @@ const GroupScreen = ({ navigation }) => {
 
   // ── Trip members (for expense form) ─────────────────────────────────────
   const [tripMembers, setTripMembers] = useState([]);
+
+  // ── SOS / Safety Status ──────────────────────────────────────────────────
+  // safetyStatuses – all safety_status rows for the selected trip
+  // mySosRecord    – the current user's own row (or null)
+  const [safetyStatuses, setSafetyStatuses] = useState([]);
+  const [mySosRecord, setMySosRecord] = useState(null);
 
   // ─── Derived: currently selected trip entry ───────────────────────────────
   const selectedEntry = myTrips[selectedTripIndex] ?? null;
@@ -224,6 +232,35 @@ const GroupScreen = ({ navigation }) => {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
+  // fetchSafetyStatuses
+  //   Loads all safety_status rows for the trip, then resolves the current
+  //   user's own row so SosButton can display the correct state.
+  // ─────────────────────────────────────────────────────────────────────────
+  const fetchSafetyStatuses = useCallback(async (tripId) => {
+    if (!tripId) {
+      setSafetyStatuses([]);
+      setMySosRecord(null);
+      return;
+    }
+
+    const res = await SafetyStatusAPI.getByTrip(tripId);
+    if (!res.isSuccess) {
+      setSafetyStatuses([]);
+      setMySosRecord(null);
+      return;
+    }
+
+    const rows = Array.isArray(res.result)
+      ? res.result
+      : res.result
+      ? [res.result]
+      : [];
+
+    setSafetyStatuses(rows);
+    setMySosRecord(rows.find((r) => r.user_id === userId) ?? null);
+  }, [userId]);
+
+  // ─────────────────────────────────────────────────────────────────────────
   // fetchExpenses
   //   Loads all expense rows for a trip, then enriches each row with full
   //   payerProfile and debtorProfile objects (for ProfileCard display in
@@ -322,7 +359,8 @@ const GroupScreen = ({ navigation }) => {
     fetchPolls(tripId);
     fetchExpenses(tripId);
     fetchTripMembers(entry?.trip ?? null);
-  }, [myTrips, selectedTripIndex, fetchPolls, fetchExpenses, fetchTripMembers]);
+    fetchSafetyStatuses(tripId);
+  }, [myTrips, selectedTripIndex, fetchPolls, fetchExpenses, fetchTripMembers, fetchSafetyStatuses]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
@@ -475,6 +513,60 @@ const GroupScreen = ({ navigation }) => {
                 </Text>
               )}
             </View>
+
+            {/* ── SOS / Safety section ── */}
+            {selectedTrip && (
+              <View style={styles.sosSection}>
+                {/* Section header */}
+                <View style={styles.pollsHeader}>
+                  <Text style={styles.sectionLabel}>Safety</Text>
+                </View>
+
+                {/* Alert banners for other members who have active SOS */}
+                {safetyStatuses
+                  .filter((s) => s.is_sos_active && s.user_id !== userId)
+                  .map((s) => {
+                    // Resolve display name from tripMembers
+                    const member = tripMembers.find((m) => m.id === s.user_id);
+                    const name = member
+                      ? `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim() ||
+                        member.username
+                      : 'Group member';
+                    return (
+                      <SosAlertBanner
+                        key={s.id}
+                        userName={name}
+                        lat={s.last_lat}
+                        long={s.last_long}
+                        updatedAt={s.updated_at}
+                      />
+                    );
+                  })}
+
+                {/* If the current user has an active SOS, show their own banner too */}
+                {mySosRecord?.is_sos_active && (
+                  <View style={styles.myActiveSosBanner}>
+                    <Text style={styles.myActiveSosText}>
+                      🆘 Your SOS is active — tap the button below to deactivate.
+                    </Text>
+                  </View>
+                )}
+
+                {/* The user's own SOS button */}
+                <View style={styles.sosButtonWrapper}>
+                  <SosButton
+                    userId={userId}
+                    tripId={selectedTrip.id}
+                    statusRecord={mySosRecord}
+                    onStatusChange={(updated) => {
+                      setMySosRecord(updated);
+                      // Refresh all statuses so banners update for the current user
+                      fetchSafetyStatuses(selectedTrip.id);
+                    }}
+                  />
+                </View>
+              </View>
+            )}
 
             {/* ── Polls section ── */}
             {selectedTrip && (
@@ -714,6 +806,31 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   newPollBtnLabel: { fontSize: 13 },
+
+  // SOS section
+  sosSection: {
+    paddingTop: 16,
+    paddingHorizontal: 24,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    paddingBottom: 20,
+  },
+  sosButtonWrapper: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  myActiveSosBanner: {
+    backgroundColor: "#8B0000",
+    borderRadius: 10,
+    padding: 12,
+  },
+  myActiveSosText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
 });
 
 export default GroupScreen;
