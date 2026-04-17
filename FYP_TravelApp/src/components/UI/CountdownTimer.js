@@ -50,8 +50,15 @@ const CountdownTimer = ({
   }, []);
 
   const start = startDate ? new Date(startDate) : null;
-  // Use end-of-UTC-day so trips/activities ending "today" remain active all day
-  const end = endDate ? endOfUTCDay(endDate) : null;
+  // Use the end date as-is when it already carries a time component (full ISO
+  // datetime strings contain 'T'). Only apply endOfUTCDay for bare date strings
+  // like "2026-04-17" that have no explicit time — otherwise the stored time
+  // (e.g. 01:37) is correctly used as the countdown target.
+  const end = endDate
+    ? endDate.includes('T')
+      ? new Date(endDate)
+      : endOfUTCDay(endDate)
+    : null;
 
   if (!start) return null;
 

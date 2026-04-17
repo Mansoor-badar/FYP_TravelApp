@@ -1,28 +1,88 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   Modal,
   ScrollView,
   StyleSheet,
+  Linking,
+  Platform,
+  Alert,
 } from "react-native";
 import TipCard from "./TipCard";
-import Button from "../../UI/Button";
+import Button, { ButtonTray } from "../../UI/Button";
+import API from "../../API/API";
+
+// Opens Google Maps walking directions (same helper pattern as MapScreen)
+const openInMaps = (latitude, longitude) => {
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  const url = Platform.select({
+    ios: `maps://app?daddr=${lat},${lng}&dirflg=w`,
+    android: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`,
+    default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`,
+  });
+  Linking.openURL(url).catch(() =>
+    Linking.openURL(
+      `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`,
+    ),
+  );
+};
 
 /**
  * TipDetailModal
  *
- * A slide-up modal that shows a full TipCard plus its coordinate chip and a
- * close button.  Extracted from the inline TipDetailModal inside MapScreen.
+ * A slide-up modal that shows a full TipCard plus:
+ *   - Coordinates chip (when available)
+ *   - Navigate button to open walking directions (when coordinates available)
+ *   - Delete button for the tip owner
+ *   - Close button
  *
  * Props:
- *   visible  – boolean
- *   tip      – travel_tips row (with latitude / longitude)
- *   profile  – author profile object passed through to TipCard (optional)
- *   onClose  – () => void
+ *   visible       – boolean
+ *   tip           – travel_tips row (with latitude / longitude)
+ *   profile       – author profile object passed through to TipCard (optional)
+ *   currentUserId – UUID of logged-in user (for delete visibility)
+ *   onClose       – () => void
+ *   onDelete      – (tipId: string) => void  called after successful deletion
  */
-const TipDetailModal = ({ visible, tip, profile, onClose }) => {
+const TipDetailModal = ({ visible, tip, profile, currentUserId, onClose, onDelete }) => {
+  const [deleting, setDeleting] = useState(false);
+
   if (!visible || !tip) return null;
+
+  const hasCoords = tip.latitude != null && tip.longitude != null;
+  const isOwner = currentUserId && tip.user_id === currentUserId;
+
+  const handleNavigate = () => {
+    if (!hasCoords) return;
+    openInMaps(tip.latitude, tip.longitude);
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Tip",
+      "Permanently delete this travel tip?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            const res = await API.delete(`/rest/v1/travel_tips?id=eq.${tip.id}`);
+            setDeleting(false);
+            if (!res.isSuccess) {
+              Alert.alert("Error", res.message || "Could not delete tip.");
+              return;
+            }
+            onDelete?.(tip.id);
+            onClose();
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -33,7 +93,7 @@ const TipDetailModal = ({ visible, tip, profile, onClose }) => {
 
             <TipCard tip={tip} profile={profile} />
 
-            {tip.latitude != null && tip.longitude != null && (
+            {hasCoords && (
               <View style={styles.coordChip}>
                 <Text style={styles.coordLabel}>Coordinates</Text>
                 <Text style={styles.coordValue}>
@@ -43,12 +103,30 @@ const TipDetailModal = ({ visible, tip, profile, onClose }) => {
               </View>
             )}
 
-            <Button
-              label="Close"
-              variant="ghost"
-              onClick={onClose}
-              styleButton={{ marginTop: 8 }}
-            />
+            <ButtonTray style={styles.actions}>
+              {hasCoords && (
+                <Button
+                  label="Navigate"
+                  variant="primary"
+                  onClick={handleNavigate}
+                />
+              )}
+              {isOwner && (
+                <Button
+                  label="Delete"
+                  variant="danger"
+                  loading={deleting}
+                  disabled={deleting}
+                  onClick={handleDelete}
+                />
+              )}
+              <Button
+                label="Close"
+                variant="ghost"
+                onClick={onClose}
+                disabled={deleting}
+              />
+            </ButtonTray>
           </ScrollView>
         </View>
       </View>
@@ -93,6 +171,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   coordValue: { fontSize: 13, color: "#333", fontWeight: "500" },
+  actions: { marginTop: 4 },
 });
 
 export default TipDetailModal;

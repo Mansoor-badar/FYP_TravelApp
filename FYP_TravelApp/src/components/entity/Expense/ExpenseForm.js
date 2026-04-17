@@ -18,17 +18,22 @@ import { formatDate } from "../../../utils/DateUtils";
 /**
  * ExpenseForm
  *
- * Form for creating a new expense split. Creates one `expenses` row per
- * selected debtor.
+ * Creates one `expenses` row per selected debtor.
+ *
+ * Logic:
+ *   - The CURRENT USER is always the payer (they made the payment).
+ *     There is no "who is paying?" selection — payer_id = currentUserId.
+ *   - The user selects WHO OWES THEM MONEY from the other trip members.
+ *   - Each selected debtor gets an individual amount input.
  *
  * Props:
- *   tripId      – UUID of the trip
- *   payerId     – UUID of the current user (default payer)
- *   tripMembers – array of profile objects: { id, first_name, last_name, username, profile_image_url }
- *   onSubmit()  – called after all rows are persisted successfully
- *   onCancel()  – called when user presses cancel
+ *   tripId       – UUID of the trip
+ *   currentUserId – UUID of the logged-in user (set as payer_id)
+ *   tripMembers  – array of profile objects: { id, first_name, last_name, username, profile_image_url }
+ *   onSubmit()   – called after all rows are persisted successfully
+ *   onCancel()   – called when user presses cancel
  */
-const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) => {
+const ExpenseForm = ({ tripId, currentUserId, tripMembers = [], onSubmit, onCancel }) => {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
 
@@ -36,7 +41,6 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
   const [dueDate, setDueDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const [selectedPayerId, setSelectedPayerId] = useState(payerId ?? null);
   // [{ memberId: string, amount: string }]
   const [debtorRows, setDebtorRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -66,9 +70,9 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
 
   const updateDebtorAmount = (memberId, value) => {
     // Allow only digits and a single decimal point
-    const sanitised = value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+    const sanitised = value.replace(/[^0-9.]/g, "").replace(/(\..*)\./, "$1");
     setDebtorRows((prev) =>
-      prev.map((r) => (r.memberId === memberId ? { ...r, amount: sanitised } : r))
+      prev.map((r) => (r.memberId === memberId ? { ...r, amount: sanitised } : r)),
     );
     if (errors.amounts) setErrors((e) => ({ ...e, amounts: null }));
   };
@@ -81,12 +85,12 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
   const validate = () => {
     const errs = {};
     if (!description.trim()) errs.description = "Description is required.";
-    if (!selectedPayerId) errs.payer = "Please select a payer.";
-    if (debtorRows.length === 0) errs.debtors = "Select at least one person who owes money.";
+    if (!currentUserId) errs.payer = "You must be logged in to create an expense.";
+    if (debtorRows.length === 0) errs.debtors = "Select at least one person who owes you money.";
     const badAmount = debtorRows.find(
-      (r) => !r.amount || isNaN(parseFloat(r.amount)) || parseFloat(r.amount) <= 0
+      (r) => !r.amount || isNaN(parseFloat(r.amount)) || parseFloat(r.amount) <= 0,
     );
-    if (badAmount) errs.amounts = "Every selected debtor needs a valid amount (> £0).";
+    if (badAmount) errs.amounts = "Every selected member needs a valid amount (> £0).";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -97,14 +101,13 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
     if (!validate()) return;
     setLoading(true);
 
+    // The current user is always the payer — they made the payment
     const basePayload = {
       trip_id: tripId,
-      payer_id: selectedPayerId,
+      payer_id: currentUserId,
       description: description.trim(),
       category: category.trim() || null,
-      // Store the due date as a plain YYYY-MM-DD string (matches DB `date` type)
       due_date: dueDateDisplay || null,
-      // 'pending' is the only allowed initial value per the DB check constraint
       settlement_status: "pending",
     };
 
@@ -114,8 +117,8 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
           ...basePayload,
           debtor_id: row.memberId,
           amount: parseFloat(row.amount),
-        })
-      )
+        }),
+      ),
     );
 
     setLoading(false);
@@ -129,8 +132,8 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
     onSubmit?.();
   };
 
-  // Debtors exclude the currently selected payer
-  const debtorMembers = tripMembers.filter((m) => m.id !== selectedPayerId);
+  // People who owe money: all trip members EXCEPT the current user (who is the payer)
+  const debtorMembers = tripMembers.filter((m) => m.id !== currentUserId);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -139,7 +142,14 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.heading}>New Expense Split</Text>
+      <Text style={styles.heading}>New Expense</Text>
+
+      {/* ── You are the payer info banner ── */}
+      <View style={styles.payerBanner}>
+        <Text style={styles.payerBannerText}>
+          💳 You paid — select who owes you money below.
+        </Text>
+      </View>
 
       {/* ── Description ── */}
       <View style={styles.field}>
@@ -171,7 +181,7 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
         />
       </View>
 
-      {/* ── Due Date — native calendar picker ── */}
+      {/* ── Due Date ── */}
       <View style={styles.field}>
         <Text style={styles.label}>Due Date (optional)</Text>
         <TouchableOpacity
@@ -194,59 +204,25 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
         )}
       </View>
 
-      {/* ── Payer selector — ProfileCard per member ── */}
+      {/* ── Who owes you money? ── */}
       <View style={styles.field}>
-        <Text style={styles.label}>Who is paying? *</Text>
-        {!!errors.payer && <Text style={styles.errorText}>{errors.payer}</Text>}
-        <View style={styles.memberList}>
-          {tripMembers.map((m) => {
-            const selected = m.id === selectedPayerId;
-            return (
-              <Pressable
-                key={m.id}
-                onPress={() => {
-                  setSelectedPayerId(m.id);
-                  // Remove this member from debtors if they were selected
-                  setDebtorRows((prev) => prev.filter((r) => r.memberId !== m.id));
-                  if (errors.payer) setErrors((e) => ({ ...e, payer: null }));
-                }}
-                style={({ pressed }) => [
-                  styles.memberCard,
-                  selected && styles.memberCardSelected,
-                  pressed && styles.memberCardPressed,
-                ]}
-              >
-                <ProfileCard profile={m} />
-                {selected && (
-                  <View style={styles.tickBadge}>
-                    <Text style={styles.tickText}>✓</Text>
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* ── Debtor selector + individual amounts ── */}
-      <View style={styles.field}>
-        <Text style={styles.label}>Who owes money? *</Text>
+        <Text style={styles.label}>Who owes you money? *</Text>
         <Text style={styles.sublabel}>
-          Tap to select members, then enter what each person owes.
+          Tap to select a member, then enter how much they owe you.
         </Text>
         {!!errors.debtors && <Text style={styles.errorText}>{errors.debtors}</Text>}
         {!!errors.amounts && <Text style={styles.errorText}>{errors.amounts}</Text>}
 
         {debtorMembers.length === 0 ? (
           <Text style={styles.noMembers}>
-            No other members to select — invite people to the trip first.
+            No other members in this trip yet — invite people first.
           </Text>
         ) : (
           <View style={styles.memberList}>
             {debtorMembers.map((m) => {
               const selected = isDebtorSelected(m.id);
               const row = debtorRows.find((r) => r.memberId === m.id);
-              const firstName = m.first_name || m.name || "them";
+              const firstName = m.first_name || m.username || "them";
               return (
                 <View key={m.id}>
                   <Pressable
@@ -257,7 +233,9 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
                       pressed && styles.memberCardPressed,
                     ]}
                   >
-                    <ProfileCard profile={m} />
+                    <View pointerEvents="none">
+                      <ProfileCard profile={m} />
+                    </View>
                     {selected && (
                       <View style={styles.tickBadge}>
                         <Text style={styles.tickText}>✓</Text>
@@ -269,7 +247,7 @@ const ExpenseForm = ({ tripId, payerId, tripMembers = [], onSubmit, onCancel }) 
                   {selected && (
                     <View style={styles.amountRow}>
                       <Text style={styles.amountLabel}>
-                        Amount {firstName} owes:
+                        {firstName} owes:
                       </Text>
                       <View style={styles.amountInputWrap}>
                         <Text style={styles.currencySymbol}>£</Text>
@@ -325,7 +303,23 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     color: "#111",
+    marginBottom: 12,
+  },
+
+  // Payer banner
+  payerBanner: {
+    backgroundColor: "#e8f5e9",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#c8e6c9",
+  },
+  payerBannerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#2e7d32",
   },
 
   // Field wrapper

@@ -88,12 +88,15 @@ const HomeScreen = ({ navigation }) => {
   // Whether the current user is involved (host or participant) in a trip
   const isMine = (t) => t.host_id === userId || participantTripIds.has(t.id);
 
-  // Whether a trip has ended — use end-of-UTC-day so a trip set to end
-  // "today" stays active for the full calendar day regardless of what time
-  // the timestamptz was recorded at.
+  // Whether a trip has ended — respect the exact stored timestamp when it
+  // contains a time component ('T'). Only fall back to end-of-UTC-day for
+  // bare date strings like '2026-04-17' that have no time.
   const isEnded = (t) => {
-    const eod = endOfUTCDay(t.end_date);
-    return !!eod && eod < now;
+    if (!t.end_date) return false;
+    const end = t.end_date.includes('T')
+      ? new Date(t.end_date)
+      : endOfUTCDay(t.end_date);
+    return !!end && end < now;
   };
 
   // My active/upcoming trips (involved + not ended)

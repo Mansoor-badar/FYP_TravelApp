@@ -30,9 +30,9 @@ const callFetch = async (endpoint, method, dataObj = null) => {
       },
       body: JSON.stringify(dataObj),
     };
-    // For POST requests to PostgREST (Supabase), ask the server to return
-    // the created representation so the client receives the new row(s).
-    if (method === 'POST') {
+    // For POST and PATCH requests to PostgREST (Supabase), ask the server to
+    // return the created/updated representation so the client receives the row(s).
+    if (method === 'POST' || method === 'PATCH') {
       requestObj.headers.Prefer = 'return=representation';
     }
   }

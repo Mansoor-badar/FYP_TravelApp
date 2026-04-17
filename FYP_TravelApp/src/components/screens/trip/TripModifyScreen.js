@@ -11,9 +11,19 @@ import TripForm from "../../entity/Trip/TripForm";
 const TripModifyScreen = ({ navigation, route }) => {
   const { trip } = route.params;
 
-  const handleSubmit = () => {
+  // Receive the saved trip from TripForm and navigate back with updated data
+  // so TripViewScreen can refresh its state from route.params.
+  const handleSubmit = (savedTrip) => {
     Alert.alert("Success", "Trip updated successfully!", [
-      { text: "OK", onPress: () => navigation.goBack() },
+      {
+        text: "OK",
+        onPress: () => {
+          // Navigate back to TripView with merged trip data
+          navigation.navigate("TripView", {
+            trip: { ...trip, ...savedTrip },
+          });
+        },
+      },
     ]);
   };
 

@@ -24,6 +24,7 @@ import ExpenseList from "../entity/Expense/ExpenseList";
 import { ExpensePopup } from "../entity/Expense/ExpenseView";
 import { SosButton, SosAlertBanner } from "../entity/SOS/SosView";
 import DocumentDrawer from "../entity/Document/DocumentDrawer";
+import { endOfUTCDay } from "../../utils/DateUtils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -119,9 +120,17 @@ const GroupScreen = ({ navigation }) => {
         : []
     );
 
-    // Keep trips where I'm host OR accepted participant
+    // Keep trips where I'm host OR accepted participant AND trip has not yet ended
+    const now = new Date();
+    const isEnded = (t) => {
+      if (!t.end_date) return false;
+      const end = t.end_date.includes('T')
+        ? new Date(t.end_date)
+        : endOfUTCDay(t.end_date);
+      return !!end && end < now;
+    };
     const eligible = allTrips.filter(
-      (t) => t.host_id === userId || myJoinedTripIds.has(t.id)
+      (t) => (t.host_id === userId || myJoinedTripIds.has(t.id)) && !isEnded(t),
     );
 
     // Fetch accepted-participant counts for each eligible trip
@@ -809,7 +818,6 @@ const GroupScreen = ({ navigation }) => {
         currentUserId={userId}
         isHost={isHost}
         onStatusChange={handleExpenseStatusChange}
-        onSettled={handleExpenseSettled}
         onDeleted={handleExpenseDeleted}
       />
 
