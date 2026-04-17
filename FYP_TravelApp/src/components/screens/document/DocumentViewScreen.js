@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   Alert,
   Linking,
   ScrollView,
@@ -15,24 +14,10 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import API from "../../API/API";
 import Button, { ButtonTray } from "../../UI/Button";
+import BackButton from "../../UI/common/BackButton";
+import InfoRow from "../../UI/common/InfoRow";
+import { getExtension, extColor } from "../../entity/Document/DocumentFileIcon";
 import { formatDate } from "../../../utils/DateUtils";
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-const getExtension = (str = "") => {
-  const parts = str.split(".");
-  return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : "FILE";
-};
-
-const EXT_COLORS = {
-  PDF:  { bg: "#fee2e2", color: "#b91c1c" },
-  JPG:  { bg: "#dbeafe", color: "#1d4ed8" },
-  JPEG: { bg: "#dbeafe", color: "#1d4ed8" },
-  PNG:  { bg: "#d1fae5", color: "#065f46" },
-  DOC:  { bg: "#ede9fe", color: "#5b21b6" },
-  DOCX: { bg: "#ede9fe", color: "#5b21b6" },
-};
-const extColor = (ext) => EXT_COLORS[ext] ?? { bg: "#f3f4f6", color: "#374151" };
 
 // ── DocumentViewScreen ────────────────────────────────────────────────────────
 
@@ -197,13 +182,7 @@ const DocumentViewScreen = ({ navigation, route }) => {
     <SafeAreaView style={styles.container}>
       {/* ── Header ── */}
       <View style={styles.header}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          hitSlop={12}
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
-        >
-          <Text style={styles.backBtnText}>‹ Back</Text>
-        </Pressable>
+        <BackButton onPress={() => navigation.goBack()} />
       </View>
 
       <ScrollView
@@ -285,54 +264,6 @@ const DocumentViewScreen = ({ navigation, route }) => {
   );
 };
 
-// ── InfoRow ───────────────────────────────────────────────────────────────────
-
-const InfoRow = ({ label, value, mono = false }) => (
-  <View style={infoStyles.row}>
-    <Text style={infoStyles.label}>{label}</Text>
-    <Text
-      style={[infoStyles.value, mono && infoStyles.mono]}
-      numberOfLines={2}
-      ellipsizeMode="middle"
-    >
-      {value}
-    </Text>
-  </View>
-);
-
-const infoStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f3f3",
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#aaa",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    flexShrink: 0,
-    maxWidth: "38%",
-  },
-  value: {
-    flex: 1,
-    fontSize: 13,
-    color: "#333",
-    fontWeight: "500",
-    textAlign: "right",
-  },
-  mono: {
-    fontFamily: "monospace",
-    fontSize: 11,
-    color: "#666",
-  },
-});
-
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -353,14 +284,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
-  },
-  backBtn: {
-    alignSelf: "flex-start",
-  },
-  backBtnText: {
-    fontSize: 16,
-    color: "#111",
-    fontWeight: "600",
   },
 
   // Scroll content

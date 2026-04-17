@@ -8,51 +8,20 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Image,
   Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import API from "../../API/API";
 import Button, { ButtonTray } from "../../UI/Button";
+import BackButton from "../../UI/common/BackButton";
+import StatusBanner from "../../UI/common/StatusBanner";
+import LoadingSpinner from "../../UI/common/LoadingSpinner";
 import { ProfileCard } from "../../entity/Profile/ProfileView";
 import ProfileView from "../../entity/Profile/ProfileView";
+import ParticipantCard from "../../entity/Profile/ParticipantCard";
 import CountdownTimer from "../../UI/CountdownTimer";
 import { formatDate, endOfUTCDay } from "../../../utils/DateUtils";
 import ItineraryItemView from "../../entity/ItineraryItem/ItineraryItemView";
-
-// ── Participant card (grid item) ──────────────────────────────────────────────
-
-const ParticipantCard = ({ participant, onViewProfile }) => {
-  const profile = participant.profile;
-  const fullName = profile
-    ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || "—"
-    : "Unknown User";
-  const avatarUri =
-    profile?.profile_image_url || "https://i.sstatic.net/l60Hf.png";
-
-  return (
-    <View style={styles.participantCard}>
-      <Image source={{ uri: avatarUri }} style={styles.cardAvatar} />
-      <Text style={styles.cardName} numberOfLines={1}>
-        {fullName}
-      </Text>
-      {!!profile?.username && (
-        <Text style={styles.cardUsername} numberOfLines={1}>
-          @{profile.username}
-        </Text>
-      )}
-      <Pressable
-        onPress={() => profile && onViewProfile(profile)}
-        style={({ pressed }) => [
-          styles.viewProfileBtn,
-          pressed && styles.viewProfileBtnPressed,
-        ]}
-      >
-        <Text style={styles.viewProfileText}>View Profile</Text>
-      </Pressable>
-    </View>
-  );
-};
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -420,15 +389,7 @@ const TripViewScreen = ({ navigation, route }) => {
               </Text>
             </View>
           </View>
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={({ pressed }) => [
-              styles.backBtn,
-              pressed && { opacity: 0.6 },
-            ]}
-          >
-            <Text style={styles.backBtnText}>← Back</Text>
-          </Pressable>
+          <BackButton onPress={() => navigation.goBack()} label="← Back" />
         </View>
 
         {/* ── Trip details ── */}
@@ -479,9 +440,17 @@ const TripViewScreen = ({ navigation, route }) => {
 
         {/* ── My participation status badge ── */}
         {!isHost && myParticipation && (
-          <View style={[styles.statusBanner, statusStyle]}>
-            <Text style={styles.statusText}>{statusLabel}</Text>
-          </View>
+          <StatusBanner
+            text={statusLabel}
+            variant={
+              myParticipation.status === "accepted"
+                ? "accepted"
+                : myParticipation.status === "rejected"
+                ? "rejected"
+                : "pending"
+            }
+            style={{ marginTop: 14 }}
+          />
         )}
 
         {/* ── Join / Request to Join (non-member, non-host, trip not yet started) ── */}
@@ -503,11 +472,11 @@ const TripViewScreen = ({ navigation, route }) => {
           myParticipation?.status === "accepted" &&
           !tripEnded &&
           (tripStarted ? (
-            <View style={[styles.statusBanner, styles.statusStarted]}>
-              <Text style={styles.statusText}>
-                ⚠ Trip is in progress — you cannot leave now
-              </Text>
-            </View>
+            <StatusBanner
+              text="⚠ Trip is in progress — you cannot leave now"
+              variant="warning"
+              style={{ marginTop: 14 }}
+            />
           ) : (
             <Button
               label="Leave Trip"
@@ -570,43 +539,19 @@ const TripViewScreen = ({ navigation, route }) => {
               <ActivityIndicator size="small" color="#000" />
             ) : (
               <View style={styles.cardGrid}>
-                {/* Host card always shown */}
+                {/* Host card */}
                 {hostProfile && (
-                  <View style={styles.participantCard}>
-                    <Image
-                      source={{
-                        uri:
-                          hostProfile.profile_image_url ||
-                          "https://i.sstatic.net/l60Hf.png",
-                      }}
-                      style={styles.cardAvatar}
-                    />
-                    <Text style={styles.cardName} numberOfLines={1}>
-                      {`${hostProfile.first_name ?? ""} ${hostProfile.last_name ?? ""}`.trim() ||
-                        "—"}
-                    </Text>
-                    {!!hostProfile.username && (
-                      <Text style={styles.cardUsername} numberOfLines={1}>
-                        @{hostProfile.username}
-                      </Text>
-                    )}
-                    <Text style={styles.hostLabel}>Host</Text>
-                    <Pressable
-                      onPress={() => handleViewProfile(hostProfile)}
-                      style={({ pressed }) => [
-                        styles.viewProfileBtn,
-                        pressed && styles.viewProfileBtnPressed,
-                      ]}
-                    >
-                      <Text style={styles.viewProfileText}>View Profile</Text>
-                    </Pressable>
-                  </View>
+                  <ParticipantCard
+                    profile={hostProfile}
+                    onViewProfile={handleViewProfile}
+                    isHost
+                  />
                 )}
                 {/* Accepted participant cards */}
                 {acceptedParticipants.map((p) => (
                   <ParticipantCard
                     key={p.id}
-                    participant={p}
+                    profile={p.profile}
                     onViewProfile={handleViewProfile}
                   />
                 ))}
