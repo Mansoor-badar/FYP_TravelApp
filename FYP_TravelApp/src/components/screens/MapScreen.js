@@ -6,7 +6,6 @@ import {
   Modal,
   ScrollView,
   Pressable,
-  ActivityIndicator,
   Linking,
   Platform,
 } from "react-native";
@@ -18,8 +17,11 @@ import * as Location from "expo-location";
 import API from "../API/API";
 import SafetyStatusAPI from "../API/SafetyStatusAPI";
 import { ItineraryItemPopup } from "../entity/ItineraryItem/ItineraryItemView";
-import TipCard from "../entity/Tip/TipCard";
+import TipDetailModal from "../entity/Tip/TipDetailModal";
 import Button from "../UI/Button";
+import FilterPillBar from "../UI/common/FilterPillBar";
+import LoadingSpinner from "../UI/common/LoadingSpinner";
+import EmptyState from "../UI/common/EmptyState";
 import { formatDateTime } from "../../utils/DateUtils";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -59,137 +61,54 @@ const openInMaps = (latitude, longitude, label = "Destination") => {
   });
 };
 
-// ─── TipDetailModal ───────────────────────────────────────────────────────────
+// ─── MapScreen's local trip sub-filter row (keeps trip-chip state here) ──────────────
 
-const TipDetailModal = ({ visible, tip, profile, onClose }) => {
-  if (!visible || !tip) return null;
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.overlay}>
-        <View style={styles.tipModal}>
-          <ScrollView contentContainerStyle={styles.tipModalContent}>
-            <Text style={styles.tipModalTitle}>Travel Tip</Text>
-
-            {/* Pre-fetched profile passed in so TipCard shows the username */}
-            <TipCard tip={tip} profile={profile} />
-
-            {tip.latitude != null && tip.longitude != null && (
-              <View style={styles.coordChip}>
-                <Text style={styles.coordLabel}>Coordinates</Text>
-                <Text style={styles.coordValue}>
-                  {Number(tip.latitude).toFixed(5)},{" "}
-                  {Number(tip.longitude).toFixed(5)}
-                </Text>
-              </View>
-            )}
-
-            <Button
-              label="Close"
-              variant="ghost"
-              onClick={onClose}
-              styleButton={{ marginTop: 8 }}
-            />
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-// ─── FilterBar ────────────────────────────────────────────────────────────────
-
-const FilterBar = ({
-  filter,
-  onFilterChange,
-  trips,
-  selectedTripId,
-  onTripChange,
-}) => (
-  <View style={styles.filterWrapper}>
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filterRow}
+const TripSubFilter = ({ trips, selectedTripId, onTripChange }) => (
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.tripRow}
+  >
+    <Pressable
+      style={[
+        styles.tripPill,
+        selectedTripId === null && styles.tripPillActive,
+      ]}
+      onPress={() => onTripChange(null)}
     >
-      <Pressable
+      <Text
         style={[
-          styles.pill,
-          filter === FILTER_ITINERARIES && styles.pillActive,
+          styles.tripPillText,
+          selectedTripId === null && styles.tripPillTextActive,
         ]}
-        onPress={() => onFilterChange(FILTER_ITINERARIES)}
       >
-        <Text
-          style={[
-            styles.pillText,
-            filter === FILTER_ITINERARIES && styles.pillTextActive,
-          ]}
-        >
-          📍 Itineraries
-        </Text>
-      </Pressable>
+        All Trips
+      </Text>
+    </Pressable>
 
+    {trips.map((t) => (
       <Pressable
-        style={[styles.pill, filter === FILTER_TIPS && styles.pillActive]}
-        onPress={() => onFilterChange(FILTER_TIPS)}
+        key={t.id}
+        style={[
+          styles.tripPill,
+          selectedTripId === t.id && styles.tripPillActive,
+        ]}
+        onPress={() => onTripChange(t.id)}
       >
         <Text
           style={[
-            styles.pillText,
-            filter === FILTER_TIPS && styles.pillTextActive,
+            styles.tripPillText,
+            selectedTripId === t.id && styles.tripPillTextActive,
           ]}
+          numberOfLines={1}
         >
-          💡 Tips
+          {t.title || t.name || "Trip"}
         </Text>
       </Pressable>
-    </ScrollView>
-
-    {filter === FILTER_ITINERARIES && trips.length > 0 && (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tripRow}
-      >
-        <Pressable
-          style={[
-            styles.tripPill,
-            selectedTripId === null && styles.tripPillActive,
-          ]}
-          onPress={() => onTripChange(null)}
-        >
-          <Text
-            style={[
-              styles.tripPillText,
-              selectedTripId === null && styles.tripPillTextActive,
-            ]}
-          >
-            All Trips
-          </Text>
-        </Pressable>
-
-        {trips.map((t) => (
-          <Pressable
-            key={t.id}
-            style={[
-              styles.tripPill,
-              selectedTripId === t.id && styles.tripPillActive,
-            ]}
-            onPress={() => onTripChange(t.id)}
-          >
-            <Text
-              style={[
-                styles.tripPillText,
-                selectedTripId === t.id && styles.tripPillTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              {t.title || t.name || "Trip"}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-    )}
-  </View>
+    ))}
+  </ScrollView>
 );
+
 
 // ─── MapScreen ────────────────────────────────────────────────────────────────
 
@@ -425,8 +344,7 @@ const MapScreen = ({ navigation }) => {
   if (loading) {
     return (
       <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" color="#111" />
-        <Text style={styles.loadingText}>Loading map data…</Text>
+        <LoadingSpinner color="#111" label="Loading map data…" />
       </SafeAreaView>
     );
   }
@@ -447,13 +365,24 @@ const MapScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <FilterBar
-        filter={filter}
-        onFilterChange={handleFilterChange}
-        trips={myTrips}
-        selectedTripId={selectedTripId}
-        onTripChange={handleTripChange}
-      />
+      {/* Filter type pills */}
+      <View style={styles.filterWrapper}>
+        <FilterPillBar
+          options={[
+            { key: FILTER_ITINERARIES, label: "📍 Itineraries" },
+            { key: FILTER_TIPS, label: "💡 Tips" },
+          ]}
+          selected={filter}
+          onSelect={handleFilterChange}
+        />
+        {filter === FILTER_ITINERARIES && myTrips.length > 0 && (
+          <TripSubFilter
+            trips={myTrips}
+            selectedTripId={selectedTripId}
+            onTripChange={handleTripChange}
+          />
+        )}
+      </View>
 
       <MapView
         ref={mapRef}
@@ -515,27 +444,25 @@ const MapScreen = ({ navigation }) => {
       {/* Empty state overlays */}
       {filter === FILTER_ITINERARIES && visibleItems.length === 0 && (
         <View style={styles.emptyOverlay} pointerEvents="none">
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>🗺️</Text>
-            <Text style={styles.emptyTitle}>No itinerary pins</Text>
-            <Text style={styles.emptySubtitle}>
-              {allTrips.length === 0
+          <EmptyState
+            emoji="🗺️"
+            title="No itinerary pins"
+            subtitle={
+              allTrips.length === 0
                 ? "Join or create a trip to see itinerary markers."
-                : "No itinerary items with coordinates found."}
-            </Text>
-          </View>
+                : "No itinerary items with coordinates found."
+            }
+          />
         </View>
       )}
 
       {filter === FILTER_TIPS && visibleTips.length === 0 && (
         <View style={styles.emptyOverlay} pointerEvents="none">
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>💡</Text>
-            <Text style={styles.emptyTitle}>No tips on the map yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Tips with coordinates will appear here.
-            </Text>
-          </View>
+          <EmptyState
+            emoji="💡"
+            title="No tips on the map yet"
+            subtitle="Tips with coordinates will appear here."
+          />
         </View>
       )}
 

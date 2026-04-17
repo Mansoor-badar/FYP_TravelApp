@@ -14,6 +14,10 @@ import * as DocumentPicker from "expo-document-picker";
 import API from "../API/API";
 import SafetyStatusAPI from "../API/SafetyStatusAPI";
 import Button from "../UI/Button";
+import ScreenHeader from "../UI/common/ScreenHeader";
+import SectionHeader from "../UI/common/SectionHeader";
+import LoadingSpinner from "../UI/common/LoadingSpinner";
+import StatusBanner from "../UI/common/StatusBanner";
 import PollList from "../entity/Poll/PollList";
 import { PollPopup } from "../entity/Poll/PollView";
 import ExpenseList from "../entity/Expense/ExpenseList";
@@ -567,25 +571,27 @@ const GroupScreen = ({ navigation }) => {
       <View style={styles.inner}>
 
         {/* ── Page header ── */}
-        <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>Group</Text>
-          <Pressable
-            onPress={() => setShowDocumentDrawer(true)}
-            style={({ pressed }) => [
-              styles.hamburgerBtn,
-              pressed && styles.hamburgerBtnPressed,
-            ]}
-            accessibilityLabel="Open documents"
-            hitSlop={8}
-          >
-            <View style={styles.hamburgerLine} />
-            <View style={[styles.hamburgerLine, styles.hamburgerLineMid]} />
-            <View style={styles.hamburgerLine} />
-          </Pressable>
-        </View>
+        <ScreenHeader
+          title="Group"
+          rightElement={
+            <Pressable
+              onPress={() => setShowDocumentDrawer(true)}
+              style={({ pressed }) => [
+                styles.hamburgerBtn,
+                pressed && styles.hamburgerBtnPressed,
+              ]}
+              accessibilityLabel="Open documents"
+              hitSlop={8}
+            >
+              <View style={styles.hamburgerLine} />
+              <View style={[styles.hamburgerLine, styles.hamburgerLineMid]} />
+              <View style={styles.hamburgerLine} />
+            </Pressable>
+          }
+        />
 
         {loadingTrips ? (
-          <ActivityIndicator size="large" color="#000" style={{ marginTop: 24 }} />
+          <LoadingSpinner size="large" color="#000" />
         ) : myTrips.length === 0 ? (
           <View style={styles.centered}>
             <Text style={styles.emptyText}>
