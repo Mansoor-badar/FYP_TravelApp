@@ -9,12 +9,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import API from "../API/API";
 import TipCard from "../entity/Tip/TipCard";
+import TipDetailModal from "../entity/Tip/TipDetailModal";
 import Button from "../UI/Button";
 
 const TravelGuideScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [tips, setTips] = useState([]);
   const [profilesMap, setProfilesMap] = useState({});
+
+  // Selected tip for the detail modal
+  const [selectedTip, setSelectedTip] = useState(null);
 
   const isMounted = useRef(true);
 
@@ -129,6 +133,7 @@ const TravelGuideScreen = ({ navigation }) => {
                             key={t.id}
                             tip={t}
                             profile={profilesMap[ownUserId]}
+                            onPress={(tip) => setSelectedTip(tip)}
                             onEdit={() =>
                               navigation.navigate("ModifyTip", { tipId: t.id })
                             }
@@ -151,6 +156,7 @@ const TravelGuideScreen = ({ navigation }) => {
                                 key={t.id}
                                 tip={t}
                                 profile={profilesMap[uid]}
+                                onPress={(tip) => setSelectedTip(tip)}
                               />
                             ))}
                           </View>
@@ -163,6 +169,21 @@ const TravelGuideScreen = ({ navigation }) => {
           </>
         )}
       </ScrollView>
+
+      {/* Tip detail modal — shown when a TipCard is tapped */}
+      <TipDetailModal
+        visible={!!selectedTip}
+        tip={selectedTip}
+        profile={
+          selectedTip ? profilesMap[selectedTip.user_id] ?? null : null
+        }
+        currentUserId={ownUserId}
+        onClose={() => setSelectedTip(null)}
+        onDelete={(tipId) => {
+          setTips((prev) => prev.filter((t) => t.id !== tipId));
+          setSelectedTip(null);
+        }}
+      />
     </SafeAreaView>
   );
 };

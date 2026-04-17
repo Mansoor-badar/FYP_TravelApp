@@ -94,21 +94,43 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
     // Determine host id (prefer prop, fall back to global.UserID)
     const resolvedHostId = hostId ?? global.UserID ?? null;
 
-    const payload = {
-      title: trip.title.trim(),
-      destination: trip.destination.trim(),
-      is_public: trip.is_public,
-      ...(trip.description.trim() && { description: trip.description.trim() }),
-      ...(trip.budget_category && { budget_category: trip.budget_category }),
-      ...(trip.primary_purpose && { primary_purpose: trip.primary_purpose }),
-      ...(trip.start_date && { start_date: trip.start_date }),
-      ...(trip.end_date && { end_date: trip.end_date }),
-      ...(trip.host_rules.trim() && { host_rules: trip.host_rules.trim() }),
-      ...(trip.number_of_participants !== "" &&
-        trip.number_of_participants !== null && {
-          number_of_participants: parseInt(trip.number_of_participants, 10),
-        }),
-    };
+    let payload;
+
+    if (originalTrip?.id) {
+      // ── EDIT mode: always send every field so cleared values are persisted ──
+      payload = {
+        title: trip.title.trim(),
+        destination: trip.destination.trim(),
+        is_public: trip.is_public,
+        description: trip.description?.trim() || null,
+        budget_category: trip.budget_category || null,
+        primary_purpose: trip.primary_purpose?.trim() || null,
+        start_date: trip.start_date || null,
+        end_date: trip.end_date || null,
+        host_rules: trip.host_rules?.trim() || null,
+        number_of_participants:
+          trip.number_of_participants !== "" && trip.number_of_participants !== null
+            ? parseInt(trip.number_of_participants, 10)
+            : null,
+      };
+    } else {
+      // ── CREATE mode: optional fields only included when non-empty ──
+      payload = {
+        title: trip.title.trim(),
+        destination: trip.destination.trim(),
+        is_public: trip.is_public,
+        ...(trip.description?.trim() && { description: trip.description.trim() }),
+        ...(trip.budget_category && { budget_category: trip.budget_category }),
+        ...(trip.primary_purpose?.trim() && { primary_purpose: trip.primary_purpose.trim() }),
+        ...(trip.start_date && { start_date: trip.start_date }),
+        ...(trip.end_date && { end_date: trip.end_date }),
+        ...(trip.host_rules?.trim() && { host_rules: trip.host_rules.trim() }),
+        ...(trip.number_of_participants !== "" &&
+          trip.number_of_participants !== null && {
+            number_of_participants: parseInt(trip.number_of_participants, 10),
+          }),
+      };
+    }
 
     // Only include host_id when creating a new trip; require user to be logged in
     if (!originalTrip?.id) {
@@ -135,17 +157,20 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
     setSaving(false);
 
     if (result.isSuccess) {
-      // On create, Supabase returns the new row(s); grab the id so we can
-      // immediately unlock the itinerary section.
-      const newId = result.result?.[0]?.id ?? originalTrip?.id;
+      // On create, Supabase returns the new row(s); grab the id.
+      // On PATCH with Prefer: return=representation, result.result is the updated row(s).
+      const savedRow = Array.isArray(result.result)
+        ? result.result[0]
+        : result.result;
+      const newId = savedRow?.id ?? originalTrip?.id;
       if (newId) {
         setSavedTripId(newId);
-
-        // Persist any locally-collected itinerary items now that we have a trip id
         await persistLocalItineraries(newId);
       }
 
-      onSubmit({ ...payload, id: newId });
+      // Merge saved row (from DB) with local payload so TripViewScreen
+      // receives the freshest data including any server-defaulted fields.
+      onSubmit({ ...payload, ...savedRow, id: newId });
     } else {
       Alert.alert(
         "Error",

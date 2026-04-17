@@ -42,7 +42,7 @@ const AddExpenseScreen = ({ navigation, route }) => {
 
       <ExpenseForm
         tripId={tripId}
-        payerId={userId}
+        currentUserId={userId}
         tripMembers={tripMembers}
         onSubmit={handleSubmit}
         onCancel={handleCancel}

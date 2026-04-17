@@ -13,12 +13,20 @@ import Button, { ButtonTray } from "../../UI/Button";
 import { ProfileCard } from "../Profile/ProfileView";
 import { formatDate } from "../../../utils/DateUtils";
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Status metadata.
+ *
+ * DB only allows: 'pending' and 'paid'.
+ * Flow:
+ *   pending → debtor presses "I've Paid"        → paid
+ *   paid    → payer presses "Verify & Delete"    → hard delete (expense is settled)
+ *   paid    → payer presses "Dispute"            → pending  (debtor hasn't paid)
+ */
 const STATUS_META = {
-  pending: { label: "⏳ Pending", bg: "#fff8e1", color: "#b45309" },
-  paid: { label: "✔ Payment Confirmed", bg: "#e3f2fd", color: "#1565c0" },
-  settled: { label: "✅ Settled", bg: "#e8f5e9", color: "#2e7d32" },
+  pending: { label: "⏳ Pending",           bg: "#fff8e1", color: "#b45309" },
+  paid:    { label: "💳 Payment Submitted", bg: "#e3f2fd", color: "#1565c0" },
 };
 
 const fmt = (amount) => `£${parseFloat(amount ?? 0).toFixed(2)}`;
@@ -39,15 +47,14 @@ const fmt = (amount) => `£${parseFloat(amount ?? 0).toFixed(2)}`;
 const ExpenseDetail = ({ expense, currentUserId }) => {
   if (!expense) return null;
 
-  const status = expense.settlement_status ?? "pending";
-  const meta = STATUS_META[status] ?? STATUS_META.pending;
-  const isPayerMe = expense.payer_id === currentUserId;
+  const status     = expense.settlement_status ?? "pending";
+  const meta       = STATUS_META[status] ?? STATUS_META.pending;
+  const isPayerMe  = expense.payer_id  === currentUserId;
   const isDebtorMe = expense.debtor_id === currentUserId;
 
-  const payerProfile = expense.payerProfile;
+  const payerProfile  = expense.payerProfile;
   const debtorProfile = expense.debtorProfile;
 
-  // Human-readable names for instruction text
   const payerDisplayName =
     payerProfile
       ? `${payerProfile.first_name ?? ""} ${payerProfile.last_name ?? ""}`.trim() ||
@@ -61,6 +68,34 @@ const ExpenseDetail = ({ expense, currentUserId }) => {
         debtorProfile.username ||
         "the debtor"
       : "the debtor";
+
+  // ── Contextual instruction text ──
+  let instructionText = null;
+  let instructionStyle = styles.instructionBox;
+  let instructionTextStyle = styles.instructionText;
+
+  if (status === "pending") {
+    if (isDebtorMe) {
+      instructionText = `You owe ${payerDisplayName}. Once you've paid, tap "I've Paid" below.`;
+    } else if (isPayerMe) {
+      instructionText = `Waiting for ${debtorDisplayName} to confirm they have paid you.`;
+    }
+  } else if (status === "paid") {
+    if (isPayerMe) {
+      instructionText = `${debtorDisplayName} has marked this as paid. Tap "Verify & Delete" to confirm you received the money, or "Dispute" if you have not.`;
+      instructionStyle = [styles.instructionBox, styles.instructionBoxBlue];
+      instructionTextStyle = [styles.instructionText, styles.instructionTextBlue];
+    } else if (isDebtorMe) {
+      instructionText = `Payment submitted — waiting for ${payerDisplayName} to verify.`;
+      instructionStyle = [styles.instructionBox, styles.instructionBoxBlue];
+      instructionTextStyle = [styles.instructionText, styles.instructionTextBlue];
+    }
+  }
+
+  // Host who is NOT the payer and NOT the debtor
+  if (!isPayerMe && !isDebtorMe) {
+    instructionText = "You are viewing this expense as a trip host.";
+  }
 
   return (
     <View style={styles.detail}>
@@ -112,55 +147,30 @@ const ExpenseDetail = ({ expense, currentUserId }) => {
         </View>
       )}
 
-      {/* Contextual instruction (no raw IDs) */}
-      {isPayerMe && status === "pending" && (
-        <View style={styles.instructionBox}>
-          <Text style={styles.instructionText}>
-            Once {debtorDisplayName} has paid you, tap "Mark as Paid" below.
-          </Text>
-        </View>
-      )}
-      {isDebtorMe && status === "paid" && (
-        <View style={[styles.instructionBox, styles.instructionBoxBlue]}>
-          <Text style={[styles.instructionText, styles.instructionTextBlue]}>
-            {payerDisplayName} has confirmed payment. Tap "Confirm & Settle" to close this debt.
-          </Text>
-        </View>
-      )}
-      {isDebtorMe && status === "pending" && (
-        <View style={styles.instructionBox}>
-          <Text style={styles.instructionText}>
-            Waiting for {payerDisplayName} to confirm that you have paid.
-          </Text>
-        </View>
-      )}
-      {!isPayerMe && !isDebtorMe && (
-        <View style={styles.instructionBox}>
-          <Text style={styles.instructionText}>
-            You are viewing this expense as a trip host.
-          </Text>
+      {/* Contextual instruction */}
+      {!!instructionText && (
+        <View style={instructionStyle}>
+          <Text style={instructionTextStyle}>{instructionText}</Text>
         </View>
       )}
     </View>
   );
 };
 
-// ── ExpensePopup ──────────────────────────────────────────────────────────────
+// ── ExpensePopup ────────────────────────────────────────────────────
 
 /**
  * ExpensePopup
  *
- * Slide-up modal for viewing and acting on an expense.
+ * Payment flow (DB only allows 'pending' and 'paid'):
+ *   pending → debtor presses "I've Paid"     → paid
+ *   paid    → payer presses "Verify & Delete" → hard-delete (expense done)
+ *   paid    → payer presses "Dispute"         → pending  (money not received)
  *
- * Props:
- *   visible        – boolean
- *   onClose()      – dismissed handler
- *   expense        – enriched expense row (payerProfile + debtorProfile attached) or null
- *   currentUserId  – UUID of the logged-in user
- *   isHost         – whether the current user is the trip host
- *   onSettled(id)  – called after payer_confirmed row is deleted by debtor
- *   onStatusChange(id, newStatus) – called after a status PATCH
- *   onDeleted(id)  – called after a hard delete
+ * Delete access:
+ *   - Payer: can verify+delete after debtor marks as paid
+ *   - Host (who is NOT payer or debtor): can delete for admin cleanup
+ *   - Debtor: CANNOT delete at any time
  */
 export const ExpensePopup = ({
   visible,
@@ -168,7 +178,6 @@ export const ExpensePopup = ({
   expense: expenseProp,
   currentUserId,
   isHost = false,
-  onSettled,
   onStatusChange,
   onDeleted,
 }) => {
@@ -181,81 +190,89 @@ export const ExpensePopup = ({
 
   if (!visible) return null;
 
-  const status = expense?.settlement_status ?? "pending";
-  const isPayerMe = expense?.payer_id === currentUserId;
+  const status     = expense?.settlement_status ?? "pending";
+  const isPayerMe  = expense?.payer_id  === currentUserId;
   const isDebtorMe = expense?.debtor_id === currentUserId;
+  // Host-only = trip host who is neither payer nor debtor
+  const isHostOnly = isHost && !isPayerMe && !isDebtorMe;
 
-  // Delete is only available to the payer or the host — NOT the debtor
-  const canHardDelete = isHost || isPayerMe;
-
-  // ── "Mark as Paid" — payer action ──────────────────────────────────────────
-  const handleMarkPaid = async () => {
+  // ── patch status ─────────────────────────────────────────────────────
+  const patchStatus = async (newStatus) => {
     if (!expense?.id) return;
     setLoading(true);
     const res = await API.patch(
       `/rest/v1/expenses?id=eq.${expense.id}`,
-      { settlement_status: "paid" }
+      { settlement_status: newStatus },
     );
     setLoading(false);
     if (!res.isSuccess) {
       Alert.alert("Error", res.message || "Failed to update status.");
       return;
     }
-    const updated = { ...expense, settlement_status: "paid" };
+    const updated = { ...expense, settlement_status: newStatus };
     setExpense(updated);
-    onStatusChange?.(expense.id, "paid");
+    onStatusChange?.(expense.id, newStatus);
   };
 
-  // ── "Confirm & Settle" — debtor action ────────────────────────────────────
-  const handleConfirmSettle = () => {
+  // ── hard delete ─────────────────────────────────────────────────────────
+  const doDelete = async () => {
     if (!expense?.id) return;
+    setLoading(true);
+    const res = await API.delete(`/rest/v1/expenses?id=eq.${expense.id}`);
+    setLoading(false);
+    if (!res.isSuccess) {
+      Alert.alert("Error", res.message || "Could not delete.");
+      return;
+    }
+    onDeleted?.(expense.id);
+    onClose();
+  };
+
+  // ── "I've Paid" — debtor (pending → paid) ───────────────────────────────
+  const handleIvePaid = () => {
     Alert.alert(
       "Confirm Payment",
-      "Mark this debt as fully settled and remove it?",
+      "Mark this as paid? The payer will be asked to verify.",
       [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm & Settle",
-          onPress: async () => {
-            setLoading(true);
-            const res = await API.delete(`/rest/v1/expenses?id=eq.${expense.id}`);
-            setLoading(false);
-            if (!res.isSuccess) {
-              Alert.alert("Error", res.message || "Failed to settle.");
-              return;
-            }
-            onSettled?.(expense.id);
-            onClose();
-          },
-        },
-      ]
+        { text: "I've Paid", onPress: () => patchStatus("paid") },
+      ],
     );
   };
 
-  // ── Hard delete (host or payer only) ──────────────────────────────────────
-  const handleDelete = () => {
-    if (!expense?.id) return;
+  // ── "Verify & Delete" — payer confirms + removes expense ───────────────────
+  const handleVerifyAndDelete = () => {
     Alert.alert(
-      "Delete Expense",
-      "Permanently delete this expense record?",
+      "Verify Payment",
+      "Confirm you received the payment. This expense will be deleted.",
       [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setLoading(true);
-            const res = await API.delete(`/rest/v1/expenses?id=eq.${expense.id}`);
-            setLoading(false);
-            if (!res.isSuccess) {
-              Alert.alert("Error", res.message || "Could not delete.");
-              return;
-            }
-            onDeleted?.(expense.id);
-            onClose();
-          },
-        },
-      ]
+        { text: "Verify & Delete", onPress: doDelete },
+      ],
+    );
+  };
+
+  // ── "Dispute" — payer disputes (paid → pending) ──────────────────────────
+  const handleDispute = () => {
+    Alert.alert(
+      "Dispute Payment",
+      "Mark this payment as not yet received? Status will revert to Pending.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Dispute", style: "destructive", onPress: () => patchStatus("pending") },
+      ],
+    );
+  };
+
+  // ── Host-only admin delete ────────────────────────────────────────────────
+  const handleHostDelete = () => {
+    Alert.alert(
+      "Delete Expense",
+      "Delete this expense as trip host?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: doDelete },
+      ],
     );
   };
 
@@ -274,33 +291,46 @@ export const ExpensePopup = ({
           </ScrollView>
 
           <ButtonTray style={styles.actionTray}>
-            {/* Payer: pending → mark paid */}
-            {isPayerMe && status === "pending" && (
+            {/* Debtor: pending → I've Paid */}
+            {isDebtorMe && status === "pending" && (
               <Button
-                label="Mark as Paid"
+                label="I've Paid"
                 variant="primary"
                 loading={loading}
-                onClick={handleMarkPaid}
+                onClick={handleIvePaid}
               />
             )}
-            {/* Debtor: paid → confirm & settle */}
-            {isDebtorMe && status === "paid" && (
+
+            {/* Payer: paid → Verify & Delete */}
+            {isPayerMe && status === "paid" && (
               <Button
-                label="Confirm & Settle"
+                label="Verify & Delete"
                 variant="primary"
                 loading={loading}
-                onClick={handleConfirmSettle}
+                onClick={handleVerifyAndDelete}
               />
             )}
-            {/* Hard delete — payer or host only, never a non-payer debtor */}
-            {canHardDelete && (
+
+            {/* Payer: paid → Dispute (reverts to pending) */}
+            {isPayerMe && status === "paid" && (
+              <Button
+                label="Dispute"
+                variant="danger"
+                disabled={loading}
+                onClick={handleDispute}
+              />
+            )}
+
+            {/* Host-only: admin delete (for trip hosts who are not payer/debtor) */}
+            {isHostOnly && (
               <Button
                 label="Delete"
                 variant="danger"
                 disabled={loading}
-                onClick={handleDelete}
+                onClick={handleHostDelete}
               />
             )}
+
             <Button label="Close" variant="ghost" onClick={onClose} />
           </ButtonTray>
         </View>
@@ -420,6 +450,9 @@ const styles = StyleSheet.create({
   instructionBoxBlue: {
     backgroundColor: "#e3f2fd",
   },
+  instructionBoxGreen: {
+    backgroundColor: "#e8f5e9",
+  },
   instructionText: {
     fontSize: 13,
     color: "#b45309",
@@ -427,6 +460,9 @@ const styles = StyleSheet.create({
   },
   instructionTextBlue: {
     color: "#1565c0",
+  },
+  instructionTextGreen: {
+    color: "#2e7d32",
   },
 
   // Modal

@@ -39,6 +39,14 @@ const TripViewScreen = ({ navigation, route }) => {
   const userId = global.UserID ?? null;
   const isHost = trip?.host_id === userId;
 
+  // Refresh trip state whenever route.params.trip changes
+  // (e.g. returning from TripModifyScreen after a successful edit)
+  useEffect(() => {
+    if (route.params?.trip) {
+      setTrip(route.params.trip);
+    }
+  }, [route.params?.trip]);
+
   // ── State ──────────────────────────────────────────────────────────────────
   const [participants, setParticipants] = useState([]);
   const [myParticipation, setMyParticipation] = useState(null);
@@ -144,10 +152,14 @@ const TripViewScreen = ({ navigation, route }) => {
 
   const now = new Date();
   const tripStarted = !!trip?.start_date && new Date(trip.start_date) <= now;
-  // Use end-of-UTC-day so a trip ending "today" stays active for the full day
+  // Respect exact stored end time: if end_date has a time component ('T') use it
+  // directly; only fall back to endOfUTCDay for bare date strings.
   const tripEnded = (() => {
-    const eod = endOfUTCDay(trip?.end_date);
-    return !!eod && eod < now;
+    if (!trip?.end_date) return false;
+    const end = trip.end_date.includes('T')
+      ? new Date(trip.end_date)
+      : endOfUTCDay(trip.end_date);
+    return !!end && end < now;
   })();
 
   // ── Participant actions ────────────────────────────────────────────────────
@@ -161,6 +173,8 @@ const TripViewScreen = ({ navigation, route }) => {
 
     // One-trip-at-a-time: block if user is already accepted in any trip that hasn't ended.
     // Pending requests don't count — only a confirmed acceptance blocks.
+    // Uses exact end timestamp (if stored with time) so a user whose trip ended
+    // at e.g. 01:25 can join a new trip immediately after.
     const existingRes = await API.get(
       `/rest/v1/participants?user_id=eq.${userId}&status=eq.accepted&select=trip_id`,
     );
@@ -174,16 +188,18 @@ const TripViewScreen = ({ navigation, route }) => {
         `/rest/v1/trips?id=in.(${existingTripIds.join(",")})&select=id,start_date,end_date`,
       );
       if (tripsRes.isSuccess && Array.isArray(tripsRes.result)) {
-        // Block whether the overlapping trip has started or not — only allow once it ends
         const hasActiveTrip = tripsRes.result.some((t) => {
-          const eod = endOfUTCDay(t.end_date);
-          return !eod || eod >= now;
+          if (!t.end_date) return true; // no end date = indefinitely active
+          const end = t.end_date.includes('T')
+            ? new Date(t.end_date)
+            : endOfUTCDay(t.end_date);
+          return !end || end >= now;
         });
         if (hasActiveTrip) {
           setActionLoading(false);
           Alert.alert(
             "One Trip at a Time",
-            "You are already in an active trip. Please leave it or wait for it to end before joining another.",
+            "You are already in an active trip. Please wait for it to end before joining another.",
           );
           return;
         }

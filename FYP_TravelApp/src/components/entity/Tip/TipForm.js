@@ -1,13 +1,9 @@
 import { useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View, ActivityIndicator } from "react-native";
 import Form from "../../UI/Form";
 import API from "../../API/API";
 import Button, { ButtonTray } from "../../UI/Button";
-
-const HIDDEN_OPTIONS = [
-  { label: "No", value: false },
-  { label: "Yes", value: true },
-];
+import useCurrentLocation from "../../../utils/useCurrentLocation";
 
 const defaultTip = {
   location: "",
@@ -27,9 +23,39 @@ const toFlat = (t) => ({
 
 const TipForm = ({ originalTip, onSubmit, onCancel }) => {
   const [tip, setTip] = useState(toFlat(originalTip));
+  const [locLoading, setLocLoading] = useState(false);
+
+  // Reuse the same location hook as the SOS button
+  const { refreshLocation } = useCurrentLocation();
 
   const handleChange = (field, value) =>
     setTip((prev) => ({ ...prev, [field]: value }));
+
+  // ── Use My Location ──────────────────────────────────────────────────────────
+  // Mirrors the SOS button pattern: calls refreshLocation(), then fills both
+  // latitude and longitude fields with the device coordinates.
+  const handleUseMyLocation = async () => {
+    setLocLoading(true);
+    try {
+      const coords = await refreshLocation();
+      if (coords) {
+        setTip((prev) => ({
+          ...prev,
+          latitude: String(coords.latitude),
+          longitude: String(coords.longitude),
+        }));
+      } else {
+        Alert.alert(
+          "Location Unavailable",
+          "Could not get your current location. Please enter coordinates manually or check your location permissions.",
+        );
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to retrieve location.");
+    } finally {
+      setLocLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     // Validate required fields
@@ -130,13 +156,32 @@ const TipForm = ({ originalTip, onSubmit, onCancel }) => {
         </ButtonTray>
       </View>
 
+      {/* ── Coordinates ──────────────────────────────────────────────────── */}
       <Text style={styles.sectionHeading}>Optional: Coordinates</Text>
+
+      {/* "Use My Location" button — fills lat/lng from the device's GPS,
+          mirroring the SOS button which uses the same useCurrentLocation hook */}
+      <View style={styles.locationButtonRow}>
+        {locLoading ? (
+          <View style={styles.locLoadingWrap}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.locLoadingText}>Getting location…</Text>
+          </View>
+        ) : (
+          <Button
+            label="📍 Use My Location"
+            variant="secondary"
+            onClick={handleUseMyLocation}
+          />
+        )}
+      </View>
 
       <Form.InputText
         label="Latitude"
         value={tip.latitude}
         onChange={(v) => handleChange("latitude", v)}
         placeholder="decimal e.g. 51.5074"
+        keyboardType="decimal-pad"
       />
 
       <Form.InputText
@@ -144,6 +189,7 @@ const TipForm = ({ originalTip, onSubmit, onCancel }) => {
         value={tip.longitude}
         onChange={(v) => handleChange("longitude", v)}
         placeholder="decimal e.g. -0.1278"
+        keyboardType="decimal-pad"
       />
     </Form>
   );
@@ -172,6 +218,20 @@ const styles = StyleSheet.create({
   },
   toggleTray: {
     marginTop: 0,
+  },
+  // Location button row
+  locationButtonRow: {
+    marginBottom: 8,
+  },
+  locLoadingWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+  },
+  locLoadingText: {
+    fontSize: 14,
+    color: "#555",
   },
 });
 
