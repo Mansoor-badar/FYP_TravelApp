@@ -90,6 +90,22 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
       Alert.alert("Validation Error", "Destination is required.");
       return;
     }
+    if (!trip.start_date) {
+      Alert.alert("Validation Error", "Start Date is required.");
+      return;
+    }
+    if (!trip.end_date) {
+      Alert.alert("Validation Error", "End Date is required.");
+      return;
+    }
+    if (
+      trip.number_of_participants === "" ||
+      trip.number_of_participants === null ||
+      trip.number_of_participants === undefined
+    ) {
+      Alert.alert("Validation Error", "Number of Participants is required.");
+      return;
+    }
 
     // Determine host id (prefer prop, fall back to global.UserID)
     const resolvedHostId = hostId ?? global.UserID ?? null;
@@ -119,16 +135,13 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
         title: trip.title.trim(),
         destination: trip.destination.trim(),
         is_public: trip.is_public,
+        start_date: trip.start_date,
+        end_date: trip.end_date,
+        number_of_participants: parseInt(trip.number_of_participants, 10),
         ...(trip.description?.trim() && { description: trip.description.trim() }),
         ...(trip.budget_category && { budget_category: trip.budget_category }),
         ...(trip.primary_purpose?.trim() && { primary_purpose: trip.primary_purpose.trim() }),
-        ...(trip.start_date && { start_date: trip.start_date }),
-        ...(trip.end_date && { end_date: trip.end_date }),
         ...(trip.host_rules?.trim() && { host_rules: trip.host_rules.trim() }),
-        ...(trip.number_of_participants !== "" &&
-          trip.number_of_participants !== null && {
-            number_of_participants: parseInt(trip.number_of_participants, 10),
-          }),
       };
     }
 
@@ -304,16 +317,16 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
       />
 
       {/* ── Dates ─────────────────────────────────────── */}
-      <Text style={styles.sectionHeading}>Dates</Text>
+      <Text style={styles.sectionHeading}>Dates *</Text>
 
       <Form.DatePicker
-        label="Start Date"
+        label="Start Date *"
         value={trip.start_date}
         onChange={(v) => handleChange("start_date", v)}
       />
 
       <Form.DatePicker
-        label="End Date"
+        label="End Date *"
         value={trip.end_date}
         onChange={(v) => handleChange("end_date", v)}
       />
@@ -329,7 +342,7 @@ const TripForm = ({ originalTrip, hostId, onSubmit, onCancel }) => {
       />
 
       <Form.InputText
-        label="Number of Participants"
+        label="Number of Participants *"
         value={
           trip.number_of_participants !== null &&
           trip.number_of_participants !== undefined

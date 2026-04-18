@@ -61,18 +61,32 @@ const ItineraryItemForm = ({
       Alert.alert("Validation Error", "Activity Name is required.");
       return;
     }
+    if (!item.start_time) {
+      Alert.alert("Validation Error", "Start Time is required.");
+      return;
+    }
+    if (!item.order_index.trim()) {
+      Alert.alert("Validation Error", "Order Index is required.");
+      return;
+    }
+    if (!item.latitude.trim()) {
+      Alert.alert("Validation Error", "Latitude is required.");
+      return;
+    }
+    if (!item.longitude.trim()) {
+      Alert.alert("Validation Error", "Longitude is required.");
+      return;
+    }
 
     const payload = {
       trip_id: originalItem?.trip_id ?? tripId ?? item.trip_id.trim(),
       activity_name: item.activity_name.trim(),
+      start_time: item.start_time,
+      order_index: parseInt(item.order_index, 10),
+      latitude: parseFloat(item.latitude),
+      longitude: parseFloat(item.longitude),
       ...(item.activity_description.trim() && {
         activity_description: item.activity_description.trim(),
-      }),
-      ...(item.start_time && { start_time: item.start_time }),
-      ...(item.latitude.trim() && { latitude: parseFloat(item.latitude) }),
-      ...(item.longitude.trim() && { longitude: parseFloat(item.longitude) }),
-      ...(item.order_index.trim() && {
-        order_index: parseInt(item.order_index, 10),
       }),
     };
 
@@ -137,33 +151,33 @@ const ItineraryItemForm = ({
       />
 
       {/* ── Scheduling ────────────────────────────────── */}
-      <Text style={styles.sectionHeading}>Scheduling</Text>
+      <Text style={styles.sectionHeading}>Scheduling *</Text>
 
       <Form.DatePicker
-        label="Start Time"
+        label="Start Time *"
         value={item.start_time}
         onChange={(v) => handleChange("start_time", v)}
       />
 
       <Form.InputText
-        label="Order Index"
+        label="Order Index *"
         value={item.order_index}
         onChange={(v) => handleChange("order_index", v)}
         placeholder="e.g. 1 (first activity of the day)"
       />
 
       {/* ── Location ──────────────────────────────────── */}
-      <Text style={styles.sectionHeading}>Location</Text>
+      <Text style={styles.sectionHeading}>Location *</Text>
 
       <Form.InputText
-        label="Latitude"
+        label="Latitude *"
         value={item.latitude}
         onChange={(v) => handleChange("latitude", v)}
         placeholder="e.g. 48.8584"
       />
 
       <Form.InputText
-        label="Longitude"
+        label="Longitude *"
         value={item.longitude}
         onChange={(v) => handleChange("longitude", v)}
         placeholder="e.g. 2.2945"

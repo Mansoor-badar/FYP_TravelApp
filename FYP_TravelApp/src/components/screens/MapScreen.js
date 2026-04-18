@@ -29,6 +29,17 @@ import { formatDateTime } from "../../utils/DateUtils";
 const FILTER_ITINERARIES = "itineraries";
 const FILTER_TIPS = "tips";
 
+// Trip status sub-filters
+const STATUS_ALL = "all";
+const STATUS_PAST = "past";
+const STATUS_AVAILABLE = "available";
+
+const TRIP_STATUS_OPTIONS = [
+  { key: STATUS_ALL, label: "All Trips" },
+  { key: STATUS_PAST, label: "Past Trips" },
+  { key: STATUS_AVAILABLE, label: "Available Trips" },
+];
+
 // Central London fallback region
 const LONDON_REGION = {
   latitude: 51.5074,
@@ -63,51 +74,93 @@ const openInMaps = (latitude, longitude, label = "Destination") => {
 
 // ─── MapScreen's local trip sub-filter row (keeps trip-chip state here) ──────────────
 
-const TripSubFilter = ({ trips, selectedTripId, onTripChange }) => (
-  <ScrollView
-    horizontal
-    showsHorizontalScrollIndicator={false}
-    contentContainerStyle={styles.tripRow}
-  >
-    <Pressable
-      style={[
-        styles.tripPill,
-        selectedTripId === null && styles.tripPillActive,
-      ]}
-      onPress={() => onTripChange(null)}
-    >
-      <Text
-        style={[
-          styles.tripPillText,
-          selectedTripId === null && styles.tripPillTextActive,
-        ]}
-      >
-        All Trips
-      </Text>
-    </Pressable>
+const TripSubFilter = ({ trips, selectedTripId, onTripChange, statusFilter, onStatusChange }) => {
+  // Filter chips list based on status
+  const now = new Date();
+  const visibleTrips = trips.filter((t) => {
+    if (statusFilter === STATUS_PAST) {
+      return t.end_date && new Date(t.end_date) < now;
+    }
+    if (statusFilter === STATUS_AVAILABLE) {
+      // Upcoming or currently active trips (end_date in future or no end_date)
+      return !t.end_date || new Date(t.end_date) >= now;
+    }
+    return true; // STATUS_ALL
+  });
 
-    {trips.map((t) => (
-      <Pressable
-        key={t.id}
-        style={[
-          styles.tripPill,
-          selectedTripId === t.id && styles.tripPillActive,
-        ]}
-        onPress={() => onTripChange(t.id)}
+  return (
+    <View>
+      {/* Status filter row */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.statusRow}
       >
-        <Text
+        {TRIP_STATUS_OPTIONS.map(({ key, label }) => {
+          const active = statusFilter === key;
+          return (
+            <Pressable
+              key={key}
+              style={[styles.statusPill, active && styles.statusPillActive]}
+              onPress={() => onStatusChange(key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+            >
+              <Text style={[styles.statusPillText, active && styles.statusPillTextActive]}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* Trip-name chips row */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tripRow}
+      >
+        <Pressable
           style={[
-            styles.tripPillText,
-            selectedTripId === t.id && styles.tripPillTextActive,
+            styles.tripPill,
+            selectedTripId === null && styles.tripPillActive,
           ]}
-          numberOfLines={1}
+          onPress={() => onTripChange(null)}
         >
-          {t.title || t.name || "Trip"}
-        </Text>
-      </Pressable>
-    ))}
-  </ScrollView>
-);
+          <Text
+            style={[
+              styles.tripPillText,
+              selectedTripId === null && styles.tripPillTextActive,
+            ]}
+          >
+            All
+          </Text>
+        </Pressable>
+
+        {visibleTrips.map((t) => (
+          <Pressable
+            key={t.id}
+            style={[
+              styles.tripPill,
+              selectedTripId === t.id && styles.tripPillActive,
+            ]}
+            onPress={() => onTripChange(t.id)}
+          >
+            <Text
+              style={[
+                styles.tripPillText,
+                selectedTripId === t.id && styles.tripPillTextActive,
+              ]}
+              numberOfLines={1}
+            >
+              {t.title || t.name || "Trip"}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
 
 
 // ─── MapScreen ────────────────────────────────────────────────────────────────
@@ -128,6 +181,7 @@ const MapScreen = ({ navigation }) => {
   // Filter
   const [filter, setFilter] = useState(FILTER_ITINERARIES);
   const [selectedTripId, setSelectedTripId] = useState(null);
+  const [tripStatusFilter, setTripStatusFilter] = useState(STATUS_ALL);
 
   // Popups
   const [selectedItinerary, setSelectedItinerary] = useState(null);
@@ -380,6 +434,11 @@ const MapScreen = ({ navigation }) => {
             trips={myTrips}
             selectedTripId={selectedTripId}
             onTripChange={handleTripChange}
+            statusFilter={tripStatusFilter}
+            onStatusChange={(s) => {
+              setTripStatusFilter(s);
+              setSelectedTripId(null); // reset trip chip when status changes
+            }}
           />
         )}
       </View>
@@ -583,7 +642,27 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 13, fontWeight: "600", color: "#555" },
   pillTextActive: { color: "#fff" },
 
-  // Trip sub-filter
+  // Trip sub-filter — status row
+  statusRow: {
+    flexDirection: "row",
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 8,
+  },
+  statusPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: "#f0f0f0",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  statusPillActive: { backgroundColor: "#111", borderColor: "#111" },
+  statusPillText: { fontSize: 12, fontWeight: "600", color: "#555" },
+  statusPillTextActive: { color: "#fff" },
+
+  // Trip sub-filter — trip chip row
   tripRow: {
     flexDirection: "row",
     paddingHorizontal: 14,

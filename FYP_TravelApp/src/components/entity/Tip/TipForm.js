@@ -67,13 +67,21 @@ const TipForm = ({ originalTip, onSubmit, onCancel }) => {
       Alert.alert("Validation Error", "Tip content is required.");
       return;
     }
+    if (!tip.latitude.trim()) {
+      Alert.alert("Validation Error", "Latitude is required.");
+      return;
+    }
+    if (!tip.longitude.trim()) {
+      Alert.alert("Validation Error", "Longitude is required.");
+      return;
+    }
 
     const payload = {
       location: tip.location.trim(),
       tip_content: tip.tip_content.trim(),
       is_hidden_gem: tip.is_hidden_gem === true,
-      ...(tip.latitude.trim() && { latitude: parseFloat(tip.latitude) }),
-      ...(tip.longitude.trim() && { longitude: parseFloat(tip.longitude) }),
+      latitude: parseFloat(tip.latitude),
+      longitude: parseFloat(tip.longitude),
     };
 
     try {
@@ -157,7 +165,7 @@ const TipForm = ({ originalTip, onSubmit, onCancel }) => {
       </View>
 
       {/* ── Coordinates ──────────────────────────────────────────────────── */}
-      <Text style={styles.sectionHeading}>Optional: Coordinates</Text>
+      <Text style={styles.sectionHeading}>Coordinates *</Text>
 
       {/* "Use My Location" button — fills lat/lng from the device's GPS,
           mirroring the SOS button which uses the same useCurrentLocation hook */}
@@ -177,7 +185,7 @@ const TipForm = ({ originalTip, onSubmit, onCancel }) => {
       </View>
 
       <Form.InputText
-        label="Latitude"
+        label="Latitude *"
         value={tip.latitude}
         onChange={(v) => handleChange("latitude", v)}
         placeholder="decimal e.g. 51.5074"
@@ -185,7 +193,7 @@ const TipForm = ({ originalTip, onSubmit, onCancel }) => {
       />
 
       <Form.InputText
-        label="Longitude"
+        label="Longitude *"
         value={tip.longitude}
         onChange={(v) => handleChange("longitude", v)}
         placeholder="decimal e.g. -0.1278"
